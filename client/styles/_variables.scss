@@ -1,0 +1,72 @@
+/**
+ * 邮件管理插件 - CSS 变量定义
+ * 现代化大厂简洁风格配色系统
+ */
+
+// k-layout 会渲染成带有 .k-layout 类的容器
+// 我们的 class="mail-listener-app" 会附加在 k-layout 上
+.mail-listener-app {
+  // 主题色 - 更柔和的蓝色
+  --ml-primary: #1677ff;
+  --ml-primary-hover: #4096ff;
+  --ml-primary-light: #e6f4ff;
+  --ml-primary-border: #91caff;
+
+  --ml-success: #52c41a;
+  --ml-success-light: #f6ffed;
+  --ml-success-border: #b7eb8f;
+
+  --ml-warning: #faad14;
+  --ml-warning-light: #fffbe6;
+
+  --ml-error: #ff4d4f;
+  --ml-error-light: #fff2f0;
+  --ml-error-border: #ffccc7;
+
+  // 文本色
+  --ml-text: var(--k-color-text);
+  --ml-text-secondary: var(--k-color-text-description);
+  --ml-text-tertiary: rgba(0, 0, 0, 0.25);
+
+  // 背景色
+  --ml-bg: var(--k-card-bg);
+  --ml-bg-base: var(--k-color-bg-1);
+  --ml-bg-hover: var(--k-hover-bg);
+  --ml-bg-container: #ffffff;
+
+  // 边框色
+  --ml-border: var(--k-color-border);
+  --ml-border-light: rgba(5, 5, 5, 0.06);
+  --ml-border-secondary: rgba(5, 5, 5, 0.12);
+
+  // 阴影系统
+  --ml-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03),
+                  0 1px 6px -1px rgba(0, 0, 0, 0.02),
+                  0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  --ml-shadow: 0 1px 2px -2px rgba(0, 0, 0, 0.16),
+               0 3px 6px 0 rgba(0, 0, 0, 0.12),
+               0 5px 12px 4px rgba(0, 0, 0, 0.09);
+  --ml-shadow-lg: 0 6px 16px 0 rgba(0, 0, 0, 0.08),
+                  0 3px 6px -4px rgba(0, 0, 0, 0.12),
+                  0 9px 28px 8px rgba(0, 0, 0, 0.05);
+
+  // 圆角系统
+  --ml-radius-sm: 6px;
+  --ml-radius: 8px;
+  --ml-radius-lg: 12px;
+
+  // 间距系统
+  --ml-spacing-xs: 8px;
+  --ml-spacing-sm: 12px;
+  --ml-spacing: 16px;
+  --ml-spacing-lg: 24px;
+  --ml-spacing-xl: 32px;
+
+  // 过渡动画
+  --ml-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --ml-transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+
+  * {
+    box-sizing: border-box;
+  }
+}

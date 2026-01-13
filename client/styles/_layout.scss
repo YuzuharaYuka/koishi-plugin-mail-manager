@@ -1,0 +1,216 @@
+/**
+ * 邮件管理插件 - 布局样式
+ */
+
+// k-layout 内部结构：k-layout > .k-layout-main > [我们的内容]
+// .ml-header 和 .ml-content 是 k-layout-main 的子元素
+
+// 顶部导航 - 固定不滚动
+.ml-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--ml-bg-container);
+  border-bottom: 1px solid var(--ml-border-light);
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+
+  .ml-title {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--ml-text);
+      letter-spacing: -0.4px;
+    }
+
+    .ml-stats {
+      display: flex;
+      gap: 20px;
+      font-size: 13px;
+      color: var(--ml-text-secondary);
+
+      .stat-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+
+        .stat-value {
+          font-weight: 600;
+          color: var(--ml-primary);
+          font-size: 14px;
+        }
+      }
+    }
+  }
+
+  .ml-nav {
+    display: flex;
+    gap: 4px;
+    background: var(--ml-bg-base);
+    padding: 4px;
+    border-radius: var(--ml-radius);
+
+    .nav-btn {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--ml-text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: var(--ml-radius-sm);
+      cursor: pointer;
+      transition: var(--ml-transition);
+
+      &:hover {
+        background: var(--ml-bg-container);
+        color: var(--ml-text);
+        box-shadow: var(--ml-shadow-sm);
+      }
+
+      &.active {
+        background: var(--ml-primary);
+        color: #fff;
+        box-shadow: 0 2px 4px rgba(22, 119, 255, 0.3);
+
+      }
+    }
+  }
+}
+
+// 主内容区
+.ml-content {
+  flex: 1 !important;
+  min-height: 0 !important; // 关键：允许 flex 子项缩小
+  overflow: hidden !important; // 不在此处滚动，让子视图自己处理
+  padding: var(--ml-spacing-lg);
+  background: var(--ml-bg-base);
+  display: flex !important;
+  flex-direction: column !important;
+
+  // keep-alive 容器和子视图容器需要填满
+  > * {
+    flex: 1 !important;
+    min-height: 0 !important; // 关键：允许缩小
+    display: flex !important;
+    flex-direction: column !important;
+  }
+}
+
+// 覆盖 k-layout 内部样式确保布局正确
+.mail-listener-app {
+  height: 100vh !important; // 关键：给根容器设置视口高度
+  max-height: 100vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+
+  // k-layout-main 是实际内容区域
+  :deep(.k-layout-main),
+  > .k-layout-main {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 0 !important; // 关键：允许缩小
+    overflow: hidden !important;
+  }
+}
+
+// 卡片样式 - 现代化风格
+.ml-card {
+  background: var(--ml-bg-container);
+  border: 1px solid var(--ml-border-light);
+  border-radius: var(--ml-radius-lg);
+  padding: var(--ml-spacing-lg);
+  box-shadow: var(--ml-shadow-sm);
+  transition: var(--ml-transition);
+  margin-bottom: var(--ml-spacing);
+
+  &:hover {
+    box-shadow: var(--ml-shadow);
+  }
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  .ml-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--ml-spacing);
+    padding-bottom: var(--ml-spacing);
+    border-bottom: 1px solid var(--ml-border-light);
+
+    .ml-card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--ml-text);
+      letter-spacing: -0.2px;
+    }
+  }
+}
+
+// 分割线
+.ml-divider {
+  height: 1px;
+  background: var(--ml-border-light);
+  margin: var(--ml-spacing) 0;
+}
+
+// 工具栏样式 - 现代化设计
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ml-spacing-sm);
+  flex-wrap: wrap;
+}
+
+// 操作按钮组
+.action-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  .ml-btn {
+    transition: var(--ml-transition-fast);
+
+    &:hover {
+      transform: scale(1.05);
+    }
+  }
+}
+
+// 表格容器
+.account-table-wrapper,
+.mail-list-wrapper,
+.rules-table-wrapper {
+  overflow-x: auto;
+  margin: calc(var(--ml-spacing) * -1);
+  padding: var(--ml-spacing);
+  border-radius: var(--ml-radius);
+
+  &::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--ml-bg-base);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--ml-border-secondary);
+    border-radius: 4px;
+    transition: var(--ml-transition);
+
+    &:hover {
+      background: var(--ml-text-tertiary);
+    }
+  }
+}

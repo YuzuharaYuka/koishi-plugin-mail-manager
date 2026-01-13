@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../dist",
+    "target": "esnext",
+    "module": "esnext",
+    "declaration": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "types": [
+      "vite/client"
+    ]
+  },
+  "include": [
+    "./**/*.ts",
+    "./**/*.vue",
+    "../../../node_modules/@koishijs/client/global.d.ts"
+  ]
+}

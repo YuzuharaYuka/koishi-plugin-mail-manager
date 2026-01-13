@@ -1,0 +1,420 @@
+/**
+ * 邮件管理插件 - 页面特定样式
+ * 现代化大厂简洁风格
+ */
+
+// 账户视图
+.accounts-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ml-spacing);
+  flex: 1; // 使用 flex 而不是 height
+  min-height: 0; // 关键：允许 flex 子项缩小
+  overflow: hidden; // 防止外部容器滚动
+  padding: 4px; // 给阴影留出空间
+
+  // 统计卡片优化
+  .stats-card {
+    background: linear-gradient(135deg, var(--ml-primary) 0%, var(--ml-primary-hover) 100%);
+    color: #fff;
+    border: none;
+    box-shadow: var(--ml-shadow);
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--ml-spacing-lg);
+
+      .stat-box {
+        text-align: center;
+
+        .stat-value {
+          font-size: 32px;
+          font-weight: 700;
+          margin-bottom: 4px;
+        }
+
+        .stat-label {
+          font-size: 13px;
+          opacity: 0.9;
+        }
+      }
+    }
+  }
+
+  // 账户表格行特殊状态
+  .ml-table {
+    tbody tr {
+      &.account-error {
+        td {
+          background: var(--ml-error-light);
+          border-left: 3px solid var(--ml-error);
+        }
+      }
+
+      &.account-disabled {
+        opacity: 0.6;
+
+        td {
+          color: var(--ml-text-secondary);
+        }
+      }
+    }
+  }
+
+  // 表格单元格内容对齐优化
+  .status-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 100%;
+  }
+
+  .switch-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  .ml-table {
+    // 让状态、启用、操作三列的表头居中
+    th:nth-child(4),  // 状态
+    th:nth-child(5),  // 启用
+    th:nth-child(6) { // 操作
+      text-align: center;
+    }
+
+    // 状态列居中
+    td:nth-child(4) {
+      text-align: center;
+    }
+
+    // 启用列居中
+    td:nth-child(5) {
+      text-align: center;
+    }
+
+    // 操作列居中
+    td:nth-child(6) {
+      text-align: center;
+
+      .action-btns {
+        display: inline-flex;
+        gap: 8px;
+      }
+    }
+  }
+
+  // 账号视图的卡片优化
+  .ml-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0; // 移除padding，避免干扰flex布局
+
+    &:first-child {
+      flex-shrink: 0; // 工具栏不压缩
+      padding: var(--ml-spacing-lg); // 工具栏保持padding
+    }
+
+    &:last-child {
+      flex: 1; // 表格卡片填充剩余空间
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    // 加载和空状态需要padding
+    .ml-loading,
+    .ml-empty {
+      padding: var(--ml-spacing-lg);
+    }
+  }
+
+  // 账户表格包装器优化
+  .account-table-wrapper {
+    flex: 1 !important;
+    min-height: 0 !important; // 关键：允许 flex 子项缩小
+    max-height: calc(100vh - 280px) !important; // 强制设置最大高度
+    overflow-y: scroll !important; // 强制显示滚动条
+    overflow-x: auto !important; // 允许水平滚动以适应缩放
+    padding: var(--ml-spacing-lg); // 在内部设置padding
+
+    // 自定义滚动条样式
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    &::-webkit-scrollbar-track {
+      background: var(--ml-bg-base);
+      border-radius: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--ml-border-secondary);
+      border-radius: 4px;
+      transition: var(--ml-transition);
+      &:hover {
+        background: var(--ml-text-tertiary);
+      }
+    }
+  }
+
+  // 表格最小宽度，适应缩放
+  .ml-table {
+    min-width: 750px; // 设置合理的最小宽度，适应常规屏幕
+  }
+}
+
+// 邮件列表视图
+.mails-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ml-spacing);
+  flex: 1; // 使用 flex 而不是 height
+  min-height: 0; // 关键：允许 flex 子项缩小
+  overflow: hidden; // 防止外部容器滚动
+
+  // 邮件项卡片化
+  .mail-item {
+    background: var(--ml-bg-container);
+    border: 1px solid var(--ml-border-light);
+    border-radius: var(--ml-radius);
+    padding: var(--ml-spacing);
+    transition: var(--ml-transition);
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--ml-primary-border);
+      box-shadow: var(--ml-shadow);
+      transform: translateY(-2px);
+    }
+
+    &.unread {
+      background: var(--ml-primary-light);
+      border-left: 3px solid var(--ml-primary);
+      font-weight: 500;
+    }
+
+    .mail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+
+      .mail-subject {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--ml-text);
+        flex: 1;
+      }
+
+      .mail-date {
+        font-size: 13px;
+        color: var(--ml-text-secondary);
+      }
+    }
+
+    .mail-from {
+      font-size: 13px;
+      color: var(--ml-text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .mail-preview {
+      font-size: 14px;
+      color: var(--ml-text-secondary);
+      line-height: 1.5;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+  }
+}
+
+// 规则视图
+.rules-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ml-spacing);
+  height: 100%;
+
+  // 规则卡片
+  .rule-card {
+    background: var(--ml-bg-container);
+    border: 1px solid var(--ml-border-light);
+    border-radius: var(--ml-radius-lg);
+    padding: var(--ml-spacing-lg);
+    box-shadow: var(--ml-shadow-sm);
+    transition: var(--ml-transition);
+
+    &:hover {
+      box-shadow: var(--ml-shadow);
+    }
+
+    &.rule-disabled {
+      opacity: 0.6;
+      background: var(--ml-bg-hover);
+    }
+
+    .rule-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--ml-spacing);
+      padding-bottom: var(--ml-spacing-sm);
+      border-bottom: 1px solid var(--ml-border-light);
+
+      .rule-name {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--ml-text);
+      }
+
+      .rule-actions {
+        display: flex;
+        gap: 8px;
+      }
+    }
+
+    .rule-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 14px;
+
+      .info-row {
+        display: flex;
+        gap: var(--ml-spacing-sm);
+
+        .info-label {
+          min-width: 80px;
+          color: var(--ml-text-secondary);
+          font-weight: 500;
+        }
+
+        .info-value {
+          color: var(--ml-text);
+          flex: 1;
+        }
+      }
+    }
+  }
+}
+
+// 预览视图
+.preview-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ml-spacing);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+
+  // 配置卡片固定在顶部
+  .config-card {
+    flex-shrink: 0;
+    padding: var(--ml-spacing-sm);
+  }
+
+  // 可滚动的内容区域
+  .preview-scroll-wrapper {
+    flex: 1 !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - 280px) !important; // 强制设置最大高度
+    overflow-y: scroll !important;
+    overflow-x: auto !important;
+    padding: 0 var(--ml-spacing-sm) var(--ml-spacing-xs) var(--ml-spacing-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--ml-spacing);
+
+    // 自定义滚动条样式
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    &::-webkit-scrollbar-track {
+      background: var(--ml-bg-base);
+      border-radius: 4px;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--ml-border-secondary);
+      border-radius: 4px;
+      transition: var(--ml-transition);
+      &:hover {
+        background: var(--ml-text-tertiary);
+      }
+    }
+  }
+
+  // 代码预览区域
+  .code-preview {
+    background: #1e1e1e;
+    border-radius: var(--ml-radius);
+    padding: var(--ml-spacing);
+    overflow-x: auto;
+    box-shadow: var(--ml-shadow);
+
+    pre {
+      margin: 0;
+      color: #d4d4d4;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+  }
+
+  // 元素列表优化
+  .elements-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ml-spacing-sm);
+
+    .element-item {
+      background: var(--ml-bg-container);
+      border: 1px solid var(--ml-border-light);
+      border-radius: var(--ml-radius);
+      padding: var(--ml-spacing);
+      transition: var(--ml-transition);
+
+      &:hover {
+        border-color: var(--ml-primary-border);
+        box-shadow: var(--ml-shadow-sm);
+      }
+
+      &.element-disabled {
+        opacity: 0.5;
+        background: var(--ml-bg-hover);
+      }
+    }
+  }
+}
+
+// 响应式优化
+@media (max-width: 768px) {
+  .accounts-view,
+  .mails-view,
+  .rules-view,
+  .preview-view {
+    padding: var(--ml-spacing-sm);
+
+    .ml-card {
+      padding: var(--ml-spacing);
+    }
+  }
+
+  .ml-table {
+    font-size: 13px;
+
+    th,
+    td {
+      padding: 10px 8px;
+    }
+  }
+
+  .action-btns {
+    flex-wrap: wrap;
+  }
+}

@@ -1,0 +1,27 @@
+﻿/**
+ * 邮件管理插件 - 主样式入口
+ *
+ * 模块说明：
+ * - _variables: CSS 变量和根元素样式
+ * - _layout: 布局相关样式（头部、内容区、卡片）
+ * - _components: 基础组件（按钮、表格、徽章、分页等）
+ * - _forms: 表单相关样式（输入框、开关、编辑器等）
+ * - _modal: 弹窗样式
+ * - _preview: 预览区域和代码编辑器
+ * - _mail-list: 邮件列表专用样式
+ * - _pages: 页面特定样式
+ * - _responsive: 响应式适配
+ */
+
+@use "variables";
+@use "layout";
+@use "components";
+@use "forms";
+@use "modal";
+@use "preview";
+@use "mail-list";
+@use "pages";
+@use "responsive";
+
+
+

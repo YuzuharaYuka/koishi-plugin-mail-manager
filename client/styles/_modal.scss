@@ -1,0 +1,413 @@
+/**
+ * 邮件管理插件 - 弹窗样式
+ * 现代化大厂风格设计
+ */
+
+// 弹窗遮罩
+.ml-modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// 弹窗主体
+.ml-modal {
+  background: var(--ml-bg-container);
+  border-radius: var(--ml-radius-lg);
+  box-shadow: var(--ml-shadow-lg);
+  width: 100%;
+  min-width: 300px;
+  max-width: 98vw;
+  max-height: 99vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  .ml-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--ml-border-light);
+
+    .ml-modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--ml-text);
+      letter-spacing: -0.3px;
+    }
+
+    .ml-modal-close {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: var(--ml-text-secondary);
+      border-radius: var(--ml-radius-sm);
+      cursor: pointer;
+      transition: var(--ml-transition);
+
+      &:hover {
+        background: var(--ml-bg-hover);
+        color: var(--ml-text);
+        transform: rotate(90deg);
+      }
+    }
+  }
+
+  .ml-modal-body {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: var(--ml-bg-base);
+      border-radius: 4px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--ml-border-secondary);
+      border-radius: 4px;
+
+      &:hover {
+        background: var(--ml-text-tertiary);
+      }
+    }
+  }
+
+  .ml-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--ml-spacing-sm);
+    padding: 16px 24px;
+    border-top: 1px solid var(--ml-border-light);
+    background: var(--ml-bg-base);
+  }
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// 邮件详情弹窗特定样式
+.mail-detail-modal {
+  width: 900px; // 默认宽度
+  max-width: 95vw;
+  max-height: 90vh;
+  height: auto;
+
+  .mail-detail-body {
+    display: flex;
+    gap: var(--ml-spacing);
+    padding: 0;
+    overflow: hidden;
+    height: calc(90vh - 40px); // 留出一些边距
+    min-height: 500px;
+  }
+
+  // 左侧：邮件信息侧边栏
+  .mail-info-sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ml-spacing);
+    padding: 0;
+    background: var(--ml-bg-base);
+    border-right: 1px solid var(--ml-border-light);
+    overflow-y: auto;
+
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: var(--ml-border-secondary);
+      border-radius: 3px;
+
+      &:hover {
+        background: var(--ml-text-tertiary);
+      }
+    }
+
+    // Sidebar 顶部标题栏
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--ml-spacing) var(--ml-spacing) var(--ml-spacing-sm);
+      border-bottom: 1px solid var(--ml-border-light);
+
+      .sidebar-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--ml-text);
+      }
+
+      .ml-modal-close {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: var(--ml-text-secondary);
+        border-radius: var(--ml-radius-sm);
+        cursor: pointer;
+        transition: var(--ml-transition);
+
+        &:hover {
+          background: var(--ml-bg-hover);
+          color: var(--ml-text);
+          transform: rotate(90deg);
+        }
+
+        svg {
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+
+    // 内容切换标签（移到sidebar）
+    .content-tabs {
+      display: flex;
+      gap: 4px;
+      padding: 0 var(--ml-spacing-sm);
+
+      .tab-btn {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border: 1px solid var(--ml-border-light);
+        background: transparent;
+        color: var(--ml-text-secondary);
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: var(--ml-radius);
+        cursor: pointer;
+        transition: var(--ml-transition);
+
+        svg {
+          width: 14px;
+          height: 14px;
+        }
+
+        &:hover {
+          border-color: var(--ml-primary-border);
+          color: var(--ml-text);
+        }
+
+        &.active {
+          background: var(--ml-primary);
+          border-color: var(--ml-primary);
+          color: #fff;
+          box-shadow: 0 2px 4px rgba(22, 119, 255, 0.3);
+        }
+      }
+    }
+
+    .mail-header-info {
+      display: flex;
+      flex-direction: column;
+      gap: var(--ml-spacing-sm);
+      padding: 0 var(--ml-spacing);
+
+      .info-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+
+        .info-label {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--ml-text-secondary);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .info-value {
+          font-size: 13px;
+          color: var(--ml-text);
+          word-break: break-word;
+          line-height: 1.5;
+        }
+      }
+    }
+
+    .attachments-section {
+      padding: 0 var(--ml-spacing);
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ml-text);
+        margin-bottom: var(--ml-spacing-sm);
+      }
+
+      .attachment-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .attachment-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        background: var(--ml-bg-container);
+        border: 1px solid var(--ml-border-light);
+        border-radius: var(--ml-radius);
+        font-size: 12px;
+        transition: var(--ml-transition);
+
+        &:hover {
+          border-color: var(--ml-primary-border);
+          box-shadow: var(--ml-shadow-sm);
+        }
+
+        svg {
+          width: 16px;
+          height: 16px;
+          color: var(--ml-text-secondary);
+          flex-shrink: 0;
+        }
+
+        .att-info {
+          flex: 1;
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .att-name {
+          color: var(--ml-text);
+          font-weight: 500;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .att-size {
+          color: var(--ml-text-secondary);
+          font-size: 11px;
+        }
+      }
+    }
+
+    .mail-actions {
+      margin-top: auto;
+      padding: var(--ml-spacing);
+      border-top: 1px solid var(--ml-border-light);
+
+      .ml-btn {
+        width: 100%;
+      }
+    }
+  }
+
+  // 右侧：邮件内容主区域
+  .mail-content-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    padding: var(--ml-spacing);
+
+    .mail-content {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+
+      .text-content {
+        flex: 1;
+        margin: 0;
+        padding: var(--ml-spacing);
+        background: var(--ml-bg-base);
+        border: 1px solid var(--ml-border-light);
+        border-radius: var(--ml-radius);
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.8;
+        color: var(--ml-text);
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-y: auto;
+
+        &::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        &::-webkit-scrollbar-track {
+          background: var(--ml-bg-base);
+          border-radius: 4px;
+        }
+
+        &::-webkit-scrollbar-thumb {
+          background: var(--ml-border-secondary);
+          border-radius: 4px;
+
+          &:hover {
+            background: var(--ml-text-tertiary);
+          }
+        }
+      }
+
+      .html-content {
+        flex: 1;
+        width: 100%;
+        min-height: 400px;
+        max-height: calc(90vh - 200px); // 留出空间给侧边栏
+        border: 1px solid var(--ml-border-light);
+        border-radius: var(--ml-radius);
+        background: #fff;
+        overflow: hidden;
+      }
+    }
+  }
+}

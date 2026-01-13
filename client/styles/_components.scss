@@ -1,0 +1,288 @@
+/**
+ * 邮件管理插件 - 基础组件样式
+ */
+
+// 表格样式 - 现代化设计
+.ml-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+
+  th,
+  td {
+    padding: 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--ml-border-light);
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--ml-text-secondary);
+    font-size: 13px;
+    background: var(--ml-bg-base);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  td {
+    font-size: 14px;
+    color: var(--ml-text);
+    background: var(--ml-bg-container);
+    vertical-align: middle;
+    height: 60px; // 固定高度以便更好对齐
+  }
+
+  tbody tr {
+    transition: var(--ml-transition-fast);
+
+    &:hover td {
+      background: var(--ml-bg-hover);
+    }
+
+    &:last-child td {
+      border-bottom: none;
+    }
+  }
+}
+
+// 按钮样式 - 现代化设计
+.ml-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--ml-border);
+  background: var(--ml-bg-container);
+  color: var(--ml-text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  border-radius: var(--ml-radius-sm);
+  cursor: pointer;
+  transition: var(--ml-transition);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.016);
+  position: relative;
+  overflow: hidden;
+
+  // 确保图标正确显示和对齐
+  svg.icon,
+  .icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  &:hover {
+    border-color: var(--ml-primary-border);
+    color: var(--ml-primary-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+
+  &.primary {
+    background: var(--ml-primary);
+    border-color: var(--ml-primary);
+    color: #fff;
+    box-shadow: 0 2px 0 rgba(5, 145, 255, 0.1);
+
+    &:hover {
+      background: var(--ml-primary-hover);
+      border-color: var(--ml-primary-hover);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(22, 119, 255, 0.3);
+    }
+
+    &:active {
+      background: var(--ml-primary);
+    }
+  }
+
+  &.danger {
+    color: var(--ml-error);
+    border-color: var(--ml-error-border);
+
+    &:hover {
+      background: var(--ml-error);
+      border-color: var(--ml-error);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(255, 77, 79, 0.3);
+    }
+  }
+
+  &.small {
+    padding: 5px 12px;
+    font-size: 13px;
+    gap: 4px;
+    line-height: 1.5;
+    border-radius: var(--ml-radius-sm);
+
+    svg.icon,
+    .icon {
+      width: 14px;
+      height: 14px;
+    }
+
+    // 仅图标的小按钮
+    &:not(:has(text)) {
+      padding: 6px;
+      min-width: 32px;
+      height: 32px;
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+// 状态徽章
+.ml-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 12px;
+  line-height: 1.2;
+  vertical-align: middle;
+
+  &.connected {
+    background: var(--ml-success-light);
+    color: var(--ml-success);
+    border: 1px solid var(--ml-success-border);
+  }
+
+  &.connecting {
+    background: var(--ml-primary-light);
+    color: var(--ml-primary);
+    border: 1px solid var(--ml-primary-border);
+  }
+
+  &.disconnected {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--ml-text-secondary);
+    border: 1px solid var(--ml-border-light);
+  }
+
+  &.error {
+    background: var(--ml-error-light);
+    color: var(--ml-error);
+    border: 1px solid var(--ml-error-border);
+  }
+}
+
+// 标签
+.ml-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 12px;
+  background: var(--ml-hover);
+  border-radius: 4px;
+  color: var(--ml-text-secondary);
+  margin-right: 4px;
+}
+
+// 空状态 - 更友好的视觉效果
+.ml-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 40px;
+  color: var(--ml-text-secondary);
+
+  .empty-icon {
+    font-size: 64px;
+    margin-bottom: var(--ml-spacing);
+    opacity: 0.25;
+    color: var(--ml-text-tertiary);
+
+    svg {
+      width: 64px;
+      height: 64px;
+    }
+  }
+
+  .empty-text {
+    font-size: 14px;
+    color: var(--ml-text-secondary);
+  }
+}
+
+// 加载状态
+.ml-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 40px;
+  color: var(--ml-text-secondary);
+  font-size: 14px;
+}
+
+// 分页 - 现代化设计
+.ml-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ml-spacing-xs);
+  padding: var(--ml-spacing) 0;
+
+  .page-btn {
+    min-width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border: 1px solid var(--ml-border-light);
+    background: var(--ml-bg-container);
+    color: var(--ml-text);
+    border-radius: var(--ml-radius-sm);
+    cursor: pointer;
+    transition: var(--ml-transition);
+    font-weight: 500;
+
+    &:hover:not(:disabled) {
+      border-color: var(--ml-primary-border);
+      color: var(--ml-primary);
+      transform: translateY(-1px);
+      box-shadow: var(--ml-shadow-sm);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    &.active {
+      background: var(--ml-primary);
+      border-color: var(--ml-primary);
+      color: #fff;
+      box-shadow: 0 2px 4px rgba(22, 119, 255, 0.3);
+    }
+  }
+
+  .page-info {
+    font-size: 13px;
+    color: var(--ml-text-secondary);
+    margin: 0 var(--ml-spacing-sm);
+    font-weight: 500;
+  }
+}
