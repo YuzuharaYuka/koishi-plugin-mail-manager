@@ -3,7 +3,7 @@
     <!-- 顶部导航 -->
     <div class="ml-header">
       <div class="ml-title">
-        <h1><Icon name="inbox" /> 邮件监听</h1>
+        <h1><Icon name="inbox" /></h1>
         <div class="ml-stats" v-if="stats">
           <div class="stat-item">
             <span>账号：</span>

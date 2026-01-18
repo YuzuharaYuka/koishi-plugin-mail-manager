@@ -286,18 +286,18 @@ onMounted(() => {
 }
 
 .mode-badge.mode-text {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--ml-info-light);
+  color: var(--ml-info);
 }
 
 .mode-badge.mode-image {
-  background: #fff3e0;
-  color: #f57c00;
+  background: var(--ml-warning-light);
+  color: var(--ml-warning);
 }
 
 .mode-badge.mode-hybrid {
-  background: #e8f5e9;
-  color: #388e3c;
+  background: var(--ml-success-light);
+  color: var(--ml-success);
 }
 
 .action-btns {

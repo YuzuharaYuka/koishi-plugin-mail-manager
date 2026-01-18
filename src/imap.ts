@@ -146,7 +146,7 @@ export class ImapConnection {
   ) {
     this.provider = MailProviderFactory.getProvider(account)
     this.retentionDays = config.mailRetentionDays
-    logger.info('Using provider: %s for %s', this.provider.displayName, account.email)
+    logger.debug('使用 %s 配置: %s', this.provider.displayName, account.email)
   }
 
   // ==================== 公共 API ====================
@@ -223,6 +223,10 @@ export class ImapConnection {
     // 停止轮询
     this.stopPolling()
 
+    // 重置监听状态
+    this.listenerState.idleLoopRunning = false
+    this.listenerState.pollEnabled = false
+
     // 立即取消重连（在检查 isDisconnecting 之前）
     this.cancelReconnect()
 
@@ -242,7 +246,7 @@ export class ImapConnection {
       await this.closeImapSession()
       this.resetState()
 
-      logger.info('Disconnected from %s', this.account.email)
+      logger.debug('%s 已断开', this.account.email)
 
       if (wasActive) {
         this.notifyStatus('disconnected')
@@ -273,11 +277,11 @@ export class ImapConnection {
       const uids = await this.findMailsToSync(days)
 
       if (uids.length === 0) {
-        logger.info('No mails to sync for %s', this.account.email)
+        logger.debug('%s 无邮件需同步', this.account.email)
         return { total: 0, synced: 0 }
       }
 
-      logger.info('Found %d mails to sync for %s', uids.length, this.account.email)
+      logger.debug('%s 发现 %d 封邮件需同步', this.account.email, uids.length)
 
       const result = await this.processMailSyncBatches(uids, onBatch)
       this.logSyncSummary(result, uids.length)
@@ -329,7 +333,7 @@ export class ImapConnection {
   private markAsConnecting(): void {
     this.state.isConnecting = true
     this.state.isConnected = false
-    logger.info('Connecting to %s...', this.account.email)
+    logger.debug('正在连接 %s...', this.account.email)
     this.notifyStatus('connecting')
   }
 
@@ -339,7 +343,7 @@ export class ImapConnection {
     this.reconnectAttempts = 0
     this.cancelReconnect()
     this.notifyStatus('connected')
-    logger.info('IMAP connected for %s', this.account.email)
+    logger.debug('%s 已连接', this.account.email)
   }
 
   private async initializeAndConnect(): Promise<void> {
@@ -369,14 +373,10 @@ export class ImapConnection {
       proxyRequired = dnsResult.proxyRequired || false
 
       if (dnsResult.allAddresses.length > 1) {
-        const latencyInfo = dnsResult.latency !== undefined ? `, latency: ${dnsResult.latency}ms` : ''
-        logger.info('[DNS] Resolved %s -> [%s], selected: %s%s',
-          this.account.imapHost,
-          dnsResult.allAddresses.join(', '),
-          resolvedHost,
-          latencyInfo)
+        const latencyInfo = dnsResult.latency !== undefined ? ` (${dnsResult.latency}ms)` : ''
+        logger.debug('[DNS] %s -> %s%s', this.account.imapHost, resolvedHost, latencyInfo)
       } else if (dnsResult.allAddresses.length === 1) {
-        logger.info('[DNS] Resolved %s -> %s', this.account.imapHost, resolvedHost)
+        logger.debug('[DNS] %s -> %s', this.account.imapHost, resolvedHost)
       }
 
       // 如果检测到需要代理但未配置，给出明确提示
@@ -384,7 +384,7 @@ export class ImapConnection {
         throw new Error(`无法连接到 ${this.account.imapHost}，所有 IP 均不可达。建议配置代理 (proxyUrl) 或检查网络连接。`)
       }
     } else {
-      logger.info('[PROXY] Using domain name %s directly (proxy will resolve DNS)', this.account.imapHost)
+      logger.debug('[代理] %s 使用域名直连', this.account.imapHost)
     }
 
     // 使用 provider 生成配置
@@ -398,8 +398,8 @@ export class ImapConnection {
       socketTimeout: connectionTimeout * 2,
     }
 
-    logger.info('[%s] Config: host=%s (original: %s), port=%d, proxy=%s, timeout=%ds',
-      this.provider.name, config.host, this.account.imapHost, config.port, proxyUrl || 'none', this.config.connectionTimeout)
+    logger.debug('[%s] host=%s, port=%d, proxy=%s',
+      this.provider.name, config.host, config.port, proxyUrl || '无')
 
     this.imapFlow = new ImapFlow(config as any)
 
@@ -442,7 +442,7 @@ export class ImapConnection {
     if (shouldRetry) {
       this.tryScheduleReconnect()
     } else {
-      logger.warn('Error is not retryable for %s: %s', this.account.email, error.message)
+      logger.debug('%s 错误不可重试: %s', this.account.email, error.message)
     }
   }
 
@@ -451,16 +451,16 @@ export class ImapConnection {
     this.resetState()
 
     if (manualDisconnect) {
-      logger.info('Manual disconnect for %s', this.account.email)
+      logger.debug('%s 手动断开', this.account.email)
       return
     }
 
     if (isConnected) {
-      logger.info('Connection closed for %s', this.account.email)
+      logger.debug('%s 连接已关闭', this.account.email)
       this.notifyStatus('disconnected')
       this.tryScheduleReconnect()
     } else if (isConnecting) {
-      logger.warn('Connection closed during handshake for %s', this.account.email)
+      logger.debug('%s 握手时连接关闭', this.account.email)
       this.tryScheduleReconnect()
     }
   }
@@ -486,7 +486,7 @@ export class ImapConnection {
     }
 
     if (!this.config.autoReconnect) {
-      logger.info('Auto-reconnect disabled for %s', this.account.email)
+      logger.debug('Auto-reconnect disabled for %s', this.account.email)
       return
     }
 
@@ -495,14 +495,13 @@ export class ImapConnection {
     this.reconnectAttempts++
 
     if (this.reconnectAttempts > this.config.maxReconnectAttempts) {
-      logger.warn('Max reconnect attempts reached for %s (%d/%d)',
-        this.account.email, this.reconnectAttempts, this.config.maxReconnectAttempts)
+      logger.warn('%s 达到最大重连次数 (%d)', this.account.email, this.config.maxReconnectAttempts)
       this.notifyStatus('error', `已达到最大重连次数 (${this.config.maxReconnectAttempts})`)
       return
     }
 
     const delay = this.calculateReconnectDelay()
-    logger.info('Scheduling reconnect for %s in %ds (Attempt %d/%d)',
+    logger.info('%s 将在 %ds 后重连 (第 %d/%d 次)',
       this.account.email, Math.floor(delay / 1000), this.reconnectAttempts, this.config.maxReconnectAttempts)
 
     // 使用 Koishi 托管的定时器
@@ -532,7 +531,7 @@ export class ImapConnection {
 
     try {
       await this.connect()
-      logger.info('Reconnection successful for %s (attempt %d)', this.account.email, this.reconnectAttempts)
+      logger.info('%s 重连成功', this.account.email)
     } catch (error) {
       logger.debug('Reconnection failed for %s: %s', this.account.email, (error as Error).message)
     }
@@ -565,8 +564,7 @@ export class ImapConnection {
     let intervalMs: number
     if (features.requiresHeartbeat && features.heartbeatInterval) {
       intervalMs = features.heartbeatInterval
-      logger.info('Using provider heartbeat interval for %s: %ds (provider: %s)',
-        this.account.email, Math.floor(intervalMs / 1000), this.provider.name)
+      logger.debug('%s 使用服务商心跳: %ds', this.account.email, Math.floor(intervalMs / 1000))
     } else {
       intervalMs = this.config.healthCheckInterval * 1000
       logger.debug('Starting health check for %s (interval: %ds)', this.account.email, this.config.healthCheckInterval)
@@ -600,12 +598,27 @@ export class ImapConnection {
     }
 
     try {
+      // 多重检查连接状态
+      if (!this.isConnectionUsable()) {
+        this.healthCheckFailCount++
+        logger.debug('%s 健康检查失败 (%d/%d)',
+          this.account.email, this.healthCheckFailCount, this.maxHealthCheckFailures)
+
+        if (this.healthCheckFailCount >= this.maxHealthCheckFailures) {
+          logger.debug('%s 连续失败 %d 次，触发重连',
+            this.account.email, this.healthCheckFailCount)
+          this.healthCheckFailCount = 0
+          this.handleZombieConnection()
+        }
+        return
+      }
+
       await this.imapFlow.noop()
       this.healthCheckFailCount = 0 // 重置失败计数
       logger.debug('Health check: %s OK', this.account.email)
     } catch (error) {
       this.healthCheckFailCount++
-      logger.warn('Health check failed for %s (%d/%d): %s',
+      logger.debug('%s 健康检查异常 (%d/%d): %s',
         this.account.email,
         this.healthCheckFailCount,
         this.maxHealthCheckFailures,
@@ -614,52 +627,135 @@ export class ImapConnection {
 
       // 只有连续失败超过阈值才触发重连
       if (this.healthCheckFailCount >= this.maxHealthCheckFailures) {
-        logger.warn('Health check failed %d times consecutively for %s, triggering reconnect',
-          this.healthCheckFailCount, this.account.email)
+        logger.debug('%s 连续失败 %d 次，触发重连',
+          this.account.email, this.healthCheckFailCount)
         this.healthCheckFailCount = 0
-        this.state.isConnected = false
-        this.handleConnectionClosed()
+        this.handleZombieConnection()
       }
     }
   }
 
   // ==================== 内部逻辑：邮件监听 ====================
 
+  /**
+   * 监听状态追踪
+   */
+  private listenerState = {
+    // IDLE 相关
+    idleLoopRunning: false,
+    idleFailCount: 0,
+    lastIdleSuccess: 0,
+
+    // 轮询相关
+    pollEnabled: false,
+    lastPollTime: 0,
+
+    // 事件计数（用于诊断）
+    existsEventCount: 0,
+    lastExistsEventTime: 0,
+  }
+
   private async startInboxListener(): Promise<void> {
     if (!this.imapFlow) return
 
     const mailbox = await this.imapFlow.mailboxOpen('INBOX')
-    logger.info('INBOX opened for %s (exists: %d)', this.account.email, mailbox.exists)
+    logger.debug('%s 收件箱已打开 (共 %d 封)', this.account.email, mailbox.exists)
 
     // 记录当前邮件数量
     this.lastMailCount = mailbox.exists
 
-    // 监听新邮件事件（IDLE 模式下服务器推送）
+    // 获取 provider 特性
+    const features = this.provider.getFeatures()
+    const strategy = features.listenStrategy || 'hybrid'
+
+    logger.debug('[监听] 策略=%s, 可靠性=%d, 超时=%ds',
+      strategy,
+      features.idleReliability || 60,
+      Math.floor((features.maxIdleTime || 20 * 60 * 1000) / 1000))
+
+    // 注册 EXISTS 事件监听器
+    this.setupExistsEventListener()
+
+    // 先执行初始扫描
+    await this.scanUnseenMails()
+
+    // 根据策略启动监听
+    switch (strategy) {
+      case 'idle-only':
+        // 仅 IDLE，适合可靠的服务器（如 Gmail）
+        this.startSmartIdleLoop()
+        break
+
+      case 'poll-only':
+        // 仅轮询，禁用 IDLE
+        this.startSmartPolling()
+        break
+
+      case 'idle-with-fallback':
+        // 优先 IDLE，失败时切换到轮询
+        this.startSmartIdleLoop()
+        // 延迟启动备选轮询（给 IDLE 一些时间证明自己）
+        this.ctx.setTimeout(() => {
+          if (!this.disposed && this.listenerState.idleFailCount > 2) {
+            logger.debug('%s IDLE 不可靠，启用轮询', this.account.email)
+            this.startSmartPolling()
+          }
+        }, 5 * 60 * 1000) // 5分钟后检查
+        break
+
+      case 'hybrid':
+      default:
+        // 混合模式：同时使用 IDLE 和轮询
+        this.startSmartIdleLoop()
+        this.startSmartPolling()
+        break
+    }
+  }
+
+  /**
+   * 设置 EXISTS 事件监听器
+   *
+   * EXISTS 事件由服务器在有新邮件时推送。
+   * 这是 IDLE 模式下接收新邮件通知的主要方式。
+   */
+  private setupExistsEventListener(): void {
+    if (!this.imapFlow) return
+
     this.imapFlow.on('exists', (data) => {
       if (this.disposed) return
 
-      logger.info('[EXISTS] %s: count=%d, prev=%d',
-        this.account.email, data.count, data.prevCount)
+      // 更新事件统计
+      this.listenerState.existsEventCount++
+      this.listenerState.lastExistsEventTime = Date.now()
+
+      logger.debug('[EXISTS] %s: %d -> %d', this.account.email, data.prevCount, data.count)
 
       // 更新邮件计数
       this.lastMailCount = data.count
 
       // 邮件数量增加时触发扫描
       if (data.count > data.prevCount) {
-        logger.info('New mail detected via EXISTS event for %s', this.account.email)
+        logger.debug('%s 检测到新邮件', this.account.email)
         this.triggerScan()
       }
     })
 
-    // 先执行初始扫描
-    await this.scanUnseenMails()
+    // 监听 expunge 事件（邮件删除）
+    this.imapFlow.on('expunge', (data) => {
+      if (this.disposed) return
+      logger.debug('[EXPUNGE] %s: seq=%d', this.account.email, data.seq)
+      // 邮件删除时减少计数
+      if (this.lastMailCount > 0) {
+        this.lastMailCount--
+      }
+    })
 
-    // 启动 IDLE 模式
-    this.startIdleLoop()
-
-    // 同时启动轮询检查作为备选方案
-    // 某些邮箱服务器的 IDLE 实现不可靠，轮询可以确保不遗漏邮件
-    this.startPolling()
+    // 监听 flags 事件（邮件标志变化）
+    this.imapFlow.on('flags', (data) => {
+      if (this.disposed) return
+      const flagsStr = data.flags ? Array.from(data.flags).join(',') : ''
+      logger.debug('[FLAGS] %s: seq=%d, flags=%s', this.account.email, data.seq, flagsStr)
+    })
   }
 
   // 触发扫描的标志
@@ -697,43 +793,84 @@ export class ImapConnection {
   }
 
   /**
-   * 启动轮询检查
+   * 智能轮询
    *
-   * 作为 IDLE 的备选方案，定期检查是否有新邮件。
-   * 某些邮箱服务器（如 QQ 邮箱）的 IDLE 实现可能不稳定，
-   * 轮询可以确保新邮件不会被遗漏。
+   * 根据 provider 特性动态调整轮询间隔：
+   * - IDLE 可靠性高：使用长间隔作为备选
+   * - IDLE 可靠性低：使用短间隔确保不遗漏
    */
-  private startPolling(): void {
-    if (this.disposed) return
+  private startSmartPolling(): void {
+    if (this.disposed || this.listenerState.pollEnabled) return
 
-    // 停止之前的轮询
     this.stopPolling()
+    this.listenerState.pollEnabled = true
 
-    // 默认轮询间隔：30 秒
-    const pollInterval = 30 * 1000
+    const features = this.provider.getFeatures()
+    const idleReliability = features.idleReliability || 60
+    const configuredInterval = features.pollInterval || 120 * 1000
 
-    logger.info('Starting poll timer for %s (interval: %ds)', this.account.email, pollInterval / 1000)
+    // 根据 IDLE 可靠性动态调整轮询间隔
+    // 可靠性高(>80)：使用配置的间隔
+    // 可靠性中(50-80)：使用配置的间隔
+    // 可靠性低(<50)：使用更短的间隔
+    let pollInterval: number
+    if (idleReliability < 50) {
+      pollInterval = Math.min(configuredInterval, 60 * 1000) // 最短 60 秒
+    } else {
+      pollInterval = configuredInterval
+    }
+
+    logger.debug('[轮询] %s 启动 (间隔 %ds)', this.account.email, Math.floor(pollInterval / 1000))
 
     this.pollTimer = this.ctx.setInterval(async () => {
-      if (this.disposed || !this.imapFlow || !this.state.isConnected) return
+      await this.performSmartPoll()
+    }, pollInterval)
+  }
 
-      try {
-        // 使用 NOOP 命令检查新邮件
-        // NOOP 会触发服务器发送任何待处理的通知（包括 EXISTS）
-        await this.imapFlow.noop()
-        logger.debug('[POLL] NOOP sent for %s', this.account.email)
+  /**
+   * 执行智能轮询检查
+   */
+  private async performSmartPoll(): Promise<void> {
+    if (this.disposed || !this.imapFlow || !this.state.isConnected) return
 
-        // 额外检查：直接搜索未读邮件
-        // 这是最可靠的方式，不依赖服务器推送
+    const now = Date.now()
+    this.listenerState.lastPollTime = now
+
+    try {
+      // 检查连接是否真实可用
+      if (!this.isConnectionUsable()) {
+        logger.debug('%s 轮询时连接不可用，触发重连', this.account.email)
+        this.handleZombieConnection()
+        return
+      }
+
+      // 使用 NOOP 命令检查新邮件
+      // NOOP 会触发服务器发送任何待处理的通知（包括 EXISTS）
+      await this.imapFlow.noop()
+      logger.debug('[POLL] NOOP OK for %s', this.account.email)
+
+      // 检查最近是否收到 EXISTS 事件
+      const timeSinceLastExists = now - this.listenerState.lastExistsEventTime
+      const features = this.provider.getFeatures()
+      const idleReliability = features.idleReliability || 60
+
+      // 如果 IDLE 可靠性低 或 长时间没有收到事件，执行主动搜索
+      const shouldSearch = idleReliability < 70 || timeSinceLastExists > 5 * 60 * 1000
+
+      if (shouldSearch) {
         const uids = await this.searchUnseenUids()
         if (uids.length > 0) {
-          logger.info('[POLL] Found %d unseen mails for %s via polling', uids.length, this.account.email)
+          logger.debug('[POLL] Found %d unseen mails for %s', uids.length, this.account.email)
           this.triggerScan()
         }
-      } catch (err) {
-        logger.debug('[POLL] Check failed for %s: %s', this.account.email, (err as Error).message)
       }
-    }, pollInterval)
+    } catch (err) {
+      logger.debug('[POLL] Check failed for %s: %s', this.account.email, (err as Error).message)
+      // 轮询失败可能意味着连接已断开
+      if (!this.isConnectionUsable()) {
+        this.handleZombieConnection()
+      }
+    }
   }
 
   private stopPolling(): void {
@@ -741,61 +878,130 @@ export class ImapConnection {
       this.pollTimer()
       this.pollTimer = null
     }
+    this.listenerState.pollEnabled = false
   }
 
   /**
-   * 启动 IDLE 循环
+   * 智能 IDLE 循环
    *
-   * IDLE 是 IMAP 的扩展命令，允许客户端保持连接并接收服务器推送的实时通知。
-   * 注意：IDLE 可能不可靠，我们同时使用轮询作为备选。
+   * 改进点：
+   * 1. 使用 imapflow 的 maxIdleTime 选项自动重启 IDLE
+   * 2. 追踪 IDLE 失败次数，动态调整策略
+   * 3. 更好的错误处理和恢复
    */
-  private startIdleLoop(): void {
-    if (!this.imapFlow || this.disposed) return
+  private startSmartIdleLoop(): void {
+    if (!this.imapFlow || this.disposed || this.listenerState.idleLoopRunning) return
+
+    this.listenerState.idleLoopRunning = true
+
+    const features = this.provider.getFeatures()
+    // 使用 provider 配置的 maxIdleTime，或默认 20 分钟
+    const maxIdleTime = features.maxIdleTime || 20 * 60 * 1000
 
     const runIdleLoop = async () => {
-      logger.info('IDLE loop started for %s', this.account.email)
+      logger.debug('[IDLE] %s 循环启动 (超时 %ds)', this.account.email, Math.floor(maxIdleTime / 1000))
 
       while (this.imapFlow && this.state.isConnected && !this.disposed) {
         try {
           // 检查连接状态
-          if (!this.imapFlow || !this.state.isConnected || this.disposed) {
+          if (!this.isConnectionUsable()) {
+            logger.debug('%s IDLE 时连接不可用', this.account.email)
             break
           }
 
-          // 进入 IDLE 模式
-          // 设置较短的超时，确保定期退出以检查状态
           logger.debug('[IDLE] Entering IDLE for %s', this.account.email)
+          const idleStartTime = Date.now()
 
+          // 调用 imapflow 的 idle 方法
+          // 传入 maxIdleTime 让 imapflow 自动处理 IDLE 重启
           await this.imapFlow.idle()
 
-          logger.debug('[IDLE] Returned for %s', this.account.email)
+          const idleDuration = Date.now() - idleStartTime
+          logger.debug('[IDLE] Returned for %s after %ds', this.account.email, Math.floor(idleDuration / 1000))
 
-          // IDLE 返回可能是因为：
-          // 1. 收到新邮件通知 (EXISTS)
-          // 2. IDLE 超时
-          // 3. 连接问题
-          // EXISTS 事件会由事件监听器处理，这里只需要短暂等待后重新进入 IDLE
+          // IDLE 成功返回，重置失败计数
+          this.listenerState.idleFailCount = 0
+          this.listenerState.lastIdleSuccess = Date.now()
 
+          // 短暂等待后重新进入 IDLE
           await sleep(100)
         } catch (err) {
           if (this.disposed || !this.state.isConnected) {
             break
           }
 
+          this.listenerState.idleFailCount++
           const errMsg = (err as Error).message
-          logger.debug('[IDLE] Interrupted for %s: %s', this.account.email, errMsg)
+
+          logger.debug('[IDLE] Error for %s (fail #%d): %s',
+            this.account.email, this.listenerState.idleFailCount, errMsg)
+
+          // 连续失败过多，可能是连接问题
+          if (this.listenerState.idleFailCount >= 3) {
+            logger.debug('%s IDLE 多次失败，检查连接', this.account.email)
+            if (!this.isConnectionUsable()) {
+              this.handleZombieConnection()
+              break
+            }
+          }
+
           await sleep(500)
         }
       }
 
-      logger.info('IDLE loop stopped for %s', this.account.email)
+      this.listenerState.idleLoopRunning = false
+      logger.debug('[IDLE] %s 循环停止', this.account.email)
     }
 
     runIdleLoop().catch(err => {
+      this.listenerState.idleLoopRunning = false
       if (!this.disposed) {
-        logger.error('IDLE loop fatal error for %s: %s', this.account.email, err.message)
+        logger.error('[IDLE] Fatal error for %s: %s', this.account.email, err.message)
       }
     })
+  }
+
+  /**
+   * 检查连接是否真正可用
+   *
+   * 这是防止僵尸状态的关键：不仅检查内部标志，还检查实际的 socket 状态
+   */
+  private isConnectionUsable(): boolean {
+    if (this.disposed) return false
+    if (!this.imapFlow) return false
+    if (!this.state.isConnected) return false
+
+    // 检查 imapflow 的 usable 属性
+    if (!this.imapFlow.usable) {
+      logger.debug('[CHECK] imapFlow.usable is false for %s', this.account.email)
+      return false
+    }
+
+    return true
+  }
+
+  /**
+   * 处理僵尸连接
+   *
+   * 当检测到连接不可用但内部状态显示已连接时触发
+   */
+  private handleZombieConnection(): void {
+    logger.warn('%s 检测到僵尸连接，重连', this.account.email)
+
+    // 清理当前状态
+    this.state.isConnected = false
+    this.stopPolling()
+    this.stopHealthCheck()
+    this.listenerState.idleLoopRunning = false
+
+    // 清理 IMAP 客户端
+    this.cleanupClient()
+
+    // 通知状态变化
+    this.notifyStatus('disconnected', '连接已断开，正在尝试重连...')
+
+    // 触发重连
+    this.tryScheduleReconnect()
   }
 
   private async scanUnseenMails(): Promise<void> {
@@ -808,7 +1014,7 @@ export class ImapConnection {
 
     if (uids.length === 0) return
 
-    logger.info('Found %d unseen mails for %s', uids.length, this.account.email)
+    logger.debug('%s 发现 %d 封未读邮件', this.account.email, uids.length)
 
     const CONCURRENT_LIMIT = 5
     for (let i = 0; i < uids.length; i += CONCURRENT_LIMIT) {
@@ -893,7 +1099,7 @@ export class ImapConnection {
 
   private async fetchBatch(uids: number[], index: number, total: number) {
     const start = Date.now()
-    logger.info('Syncing batch %d/%d (%d mails)...', index, total, uids.length)
+    logger.debug('同步批次 %d/%d (%d 封)...', index, total, uids.length)
 
     const promises = uids.map(uid => this.downloadMailWithTimeout(uid, SYNC_STRATEGY.FETCH_TIMEOUT))
     const results = await Promise.all(promises)
@@ -902,14 +1108,14 @@ export class ImapConnection {
     const timeouts = uids.filter((_, i) => results[i] === null)
 
     const duration = Date.now() - start
-    logger.info('Batch %d done in %dms. Success: %d, Timeout: %d',
+    logger.debug('批次 %d 完成 (%dms), 成功 %d, 超时 %d',
       index, duration, mails.length, timeouts.length)
 
     return { mails, timeouts }
   }
 
   private async retrySkippedMails(uids: number[], onBatch?: (mails: ParsedMail[]) => Promise<void>): Promise<number> {
-    logger.info('Retrying %d timed out mails...', uids.length)
+    logger.debug('重试 %d 封超时邮件...', uids.length)
 
     const mails: ParsedMail[] = []
     for (const uid of uids) {
@@ -939,29 +1145,28 @@ export class ImapConnection {
       // 首先获取邮件大小（不下载内容）
       const sizeInfo = await this.imapFlow.fetchOne(String(uid), { size: true }, { uid: true })
       if (sizeInfo && sizeInfo.size && sizeInfo.size > SYNC_STRATEGY.MAX_MAIL_SIZE) {
-        logger.warn('Mail %s is too large (%d bytes > %d bytes limit), skipping',
+        logger.debug('邮件 %s 过大 (%d > %d bytes)，跳过',
           uid, sizeInfo.size, SYNC_STRATEGY.MAX_MAIL_SIZE)
         return null
       }
 
       const message = await this.imapFlow.fetchOne(String(uid), { source: true }, { uid: true })
       if (!message || !message.source) {
-        logger.warn('Mail %s has no source data', uid)
+        logger.debug('邮件 %s 无数据', uid)
         return null
       }
 
       // 再次检查实际下载的大小
       const sourceBuffer = message.source as Buffer
       if (sourceBuffer.length > SYNC_STRATEGY.MAX_MAIL_SIZE) {
-        logger.warn('Mail %s actual size (%d bytes) exceeds limit, skipping',
-          uid, sourceBuffer.length)
+        logger.debug('邮件 %s 实际大小 (%d bytes) 超限，跳过', uid, sourceBuffer.length)
         return null
       }
 
       const parsedMail = await parseMail(sourceBuffer)
 
       if (!this.validateMail(parsedMail)) {
-        logger.warn('Mail %s validation failed, skipping', uid)
+        logger.debug('邮件 %s 验证失败，跳过', uid)
         return null
       }
 
@@ -1047,6 +1252,9 @@ export class ImapConnection {
     this.state.isConnecting = false
     this.state.isConnected = false
     this.mailboxLock = null
+    // 重置监听状态
+    this.listenerState.idleLoopRunning = false
+    this.listenerState.idleFailCount = 0
     // 注意：不在这里重置 reconnectAttempts，让重连逻辑自己管理
   }
 
@@ -1069,8 +1277,7 @@ export class ImapConnection {
   }
 
   private logSyncSummary(result: { synced: number; skipped: number[] }, total: number): void {
-    logger.info('Sync completed. Total: %d, Synced: %d, Skipped: %d',
-      total, result.synced, result.skipped.length)
+    logger.debug('同步完成: %d/%d', result.synced, total)
   }
 
   private validateMail(mail: ParsedMail | null): mail is ParsedMail {

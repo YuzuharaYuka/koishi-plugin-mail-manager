@@ -415,15 +415,15 @@ const getModeLabel = (mode?: ForwardMode) => {
   margin-top: 16px;
 
   &.success {
-    background: #f6ffed;
-    border: 1px solid #b7eb8f;
-    color: #52c41a;
+    background: var(--ml-success-light);
+    border: 1px solid var(--ml-success-border);
+    color: var(--ml-success);
   }
 
   &.error {
-    background: #fff2f0;
-    border: 1px solid #ffccc7;
-    color: #ff4d4f;
+    background: var(--ml-danger-light);
+    border: 1px solid var(--ml-danger-border);
+    color: var(--ml-danger);
   }
 
   .result-content {

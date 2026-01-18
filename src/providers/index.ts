@@ -87,4 +87,4 @@ export {
 }
 
 // 导出类型
-export type { ProviderConfig, ProviderFeatures } from './base'
+export type { ProviderConfig, ProviderFeatures, ListenStrategy } from './base'

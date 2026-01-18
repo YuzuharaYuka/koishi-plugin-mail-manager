@@ -67,7 +67,7 @@ export async function createAccount(data: CreateMailAccountRequest): Promise<Mai
     updatedAt: now,
   })
 
-  logger.info(LogModule.RULE, `创建账号 ${account.email}`)
+  logger.debug(LogModule.RULE, `创建账号 ${account.email}`)
 
   if (account.enabled) {
     connectAccount(account.id).catch((error) => {
@@ -100,7 +100,7 @@ export async function deleteAccount(id: number): Promise<void> {
   await disconnectAccount(id)
   await ctx.database.remove(TABLE_MAILS, { accountId: id })
   await ctx.database.remove(TABLE_ACCOUNTS, { id })
-  logger.info(LogModule.RULE, `删除账号 ${id}`)
+  logger.debug(LogModule.RULE, `删除账号 #${id}`)
 }
 
 // ============ 连接管理 ============
@@ -119,7 +119,7 @@ export async function testConnection(id: number): Promise<ConnectionTestResult> 
   } catch (e) {
     return {
       success: false,
-      message: `无法解密账号密码。如果您更改了加密密钥，请重新配置账号密码。`,
+      message: `密码解密失败，请重新配置`,
     }
   }
 
@@ -150,7 +150,7 @@ export async function connectAccount(id: number): Promise<void> {
   try {
     account.password = decryptPassword(account.password)
   } catch (e) {
-    const errorMsg = `无法解密账号 ${account.email} 的密码。如果您更改了加密密钥，请重新配置账号密码。`
+    const errorMsg = `${account.email} 密码解密失败，请重新配置`
     logger.error(LogModule.CONNECT, errorMsg)
     await updateAccountStatus(id, 'error', errorMsg)
     throw new Error(errorMsg)
@@ -290,10 +290,10 @@ export async function updateAccountStatus(id: number, status: MailAccount['statu
       updatedAt: new Date(),
     })
 
-    logger.info(LogModule.SYSTEM, `[状态更新] 账号 ${id} 状态变更为: ${status}${error ? ` (错误: ${error})` : ''}`)
+    logger.debug(LogModule.SYSTEM, `账号 #${id} -> ${status}${error ? ` (${error})` : ''}`)
 
     if (!ctx.console) {
-      logger.warn(LogModule.SYSTEM, `[状态更新] console 服务不可用，无法广播事件`)
+      logger.debug(LogModule.SYSTEM, `console 不可用，跳过广播`)
       return
     }
 
@@ -303,9 +303,7 @@ export async function updateAccountStatus(id: number, status: MailAccount['statu
       error: error || null,
       timestamp: new Date().toISOString(),
     })
-
-    logger.debug(LogModule.SYSTEM, `[状态更新] 已广播状态变更事件: accountId=${id}, status=${status}`)
   } catch (e) {
-    logger.error(LogModule.SYSTEM, `更新账号状态失败: ${(e as Error).message}`)
+    logger.error(LogModule.SYSTEM, `更新状态失败: ${(e as Error).message}`)
   }
 }

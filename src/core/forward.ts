@@ -67,7 +67,7 @@ export async function handleNewMail(accountId: number, parsedMail: ParsedMail): 
 
   try {
     const mail = await createMail(accountId, parsedMail)
-    logger.info(LogModule.MAIL, `账户 #${accountId} 收到新邮件: "${mail.subject}"`)
+    logger.info(LogModule.MAIL, `收到新邮件: "${mail.subject}"`)
 
     // 异步处理自动转发，不阻塞主流程
     processAutoForwardingAsync(mail).catch(e => {
@@ -125,7 +125,7 @@ export async function processAutoForwardingAsync(mail: StoredMail): Promise<void
         continue
       }
 
-      logger.info(LogModule.FORWARD, `邮件 "${mail.subject}" 匹配规则 "${rule.name}" (优先级: ${rule.priority})，开始转发`)
+      logger.info(LogModule.FORWARD, `转发 "${mail.subject}" -> 规则 "${rule.name}"`)
 
       // 如果配置了延迟，则等待
       const delay = rule.delayMs || 0
@@ -151,11 +151,11 @@ export async function processAutoForwardingAsync(mail: StoredMail): Promise<void
  */
 function logForwardResult(logger: ReturnType<typeof getLogger>, result: ForwardResult, rule: ForwardRule): void {
   if (result.success) {
-    logger.info(LogModule.FORWARD, `转发成功: ${result.successCount}/${result.totalTargets} 个目标`)
+    logger.info(LogModule.FORWARD, `转发成功 (${result.successCount}/${result.totalTargets})`)
   } else if (result.successCount > 0) {
-    logger.warn(LogModule.FORWARD, `转发部分成功: ${result.successCount}/${result.totalTargets}，失败: ${result.errors?.join(', ')}`)
+    logger.warn(LogModule.FORWARD, `部分成功 (${result.successCount}/${result.totalTargets})`)
   } else {
-    logger.error(LogModule.FORWARD, `转发全部失败: ${result.errors?.join(', ')}`)
+    logger.error(LogModule.FORWARD, `转发失败: ${result.errors?.join(', ')}`)
   }
 }
 
@@ -232,7 +232,7 @@ async function executeForwardWithRetry(mailId: number, rule: ForwardRule): Promi
   // 如果需要重试且有失败的目标
   if (!lastResult.success && maxRetries > 0 && lastResult.failedTargets && lastResult.failedTargets.length > 0) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      logger.info(LogModule.FORWARD, `重试转发 (${attempt}/${maxRetries})，等待 ${retryInterval}ms`)
+      logger.debug(LogModule.FORWARD, `重试 ${attempt}/${maxRetries}`)
       await sleep(retryInterval)
 
       // 只重试失败的目标
@@ -440,13 +440,24 @@ export async function startAllConnections(): Promise<void> {
 
   const accounts = await ctx.database.get('mail_manager.accounts', { enabled: true })
 
+  if (accounts.length === 0) {
+    logger.debug(LogModule.IMAP, '无已启用账户')
+    return
+  }
+
+  logger.info(LogModule.IMAP, `连接 ${accounts.length} 个邮箱账户...`)
+
   for (const account of accounts) {
     try {
+      logger.debug(LogModule.IMAP, `连接 "${account.name}" (${account.email})...`)
       await connectAccount(account.id)
+      logger.info(LogModule.IMAP, `"${account.name}" 已连接`)
     } catch (e) {
-      logger.error(LogModule.IMAP, `启动账户 "${account.name}" 连接失败: ${(e as Error).message}`)
+      logger.error(LogModule.IMAP, `"${account.name}" 连接失败: ${(e as Error).message}`)
     }
   }
+
+  logger.debug(LogModule.IMAP, '所有账户初始化完成')
 }
 
 /**
@@ -454,13 +465,21 @@ export async function startAllConnections(): Promise<void> {
  */
 export async function stopAllConnections(): Promise<void> {
   const logger = getLogger()
+  const count = activeConnections.size
+
+  if (count === 0) {
+    logger.debug(LogModule.IMAP, '无活跃连接')
+    return
+  }
+
+  logger.debug(LogModule.IMAP, `断开 ${count} 个连接...`)
 
   for (const [accountId, connection] of activeConnections.entries()) {
     try {
       await connection.disconnect()
       activeConnections.delete(accountId)
     } catch (e) {
-      logger.warn(LogModule.IMAP, `断开账户 #${accountId} 连接失败: ${(e as Error).message}`)
+      logger.warn(LogModule.IMAP, `账户 #${accountId} 断开失败`)
     }
   }
 }

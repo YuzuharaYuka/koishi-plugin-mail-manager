@@ -113,6 +113,38 @@ npm install koishi-plugin-mail-listener
 | maxReconnectAttempts | number | 10 | 最大重连尝试次数 |
 | reconnectInterval | number | 30 | 重连基础间隔（秒） |
 | connectionTimeout | number | 30 | 连接超时时间（秒） |
+| healthCheckEnabled | boolean | true | 启用连接健康检查 |
+| healthCheckInterval | number | 60 | 健康检查间隔（秒） |
+
+## 邮件监听机制
+
+插件采用智能的 IDLE + 轮询混合机制监听新邮件，针对不同邮箱服务商进行了优化：
+
+### 监听策略
+
+| 策略 | 说明 | 适用场景 |
+|------|------|----------|
+| `idle-only` | 仅使用 IDLE | Gmail 等 IDLE 实现可靠的服务器 |
+| `poll-only` | 仅使用轮询 | IDLE 完全不可用的服务器 |
+| `hybrid` | 同时使用 IDLE 和轮询 | 通用场景，最安全（默认） |
+| `idle-with-fallback` | 优先 IDLE，失败时切换轮询 | QQ 邮箱等 IDLE 基本可靠的服务器 |
+
+### 各邮箱服务商配置
+
+| 邮箱 | 监听策略 | IDLE 超时 | 轮询间隔 | 可靠性 |
+|------|----------|----------|----------|--------|
+| Gmail | `idle-only` | 29 分钟 | 5 分钟(备选) | 95% |
+| QQ 邮箱 | `idle-with-fallback` | 25 分钟 | 2 分钟 | 75% |
+| 163/126 邮箱 | `hybrid` | 150 秒 | 60 秒 | 50% |
+| 通用 | `hybrid` | 20 分钟 | 2 分钟 | 60% |
+
+### 僵尸连接检测
+
+插件包含智能的僵尸连接检测机制：
+
+1. **多重状态检查**：不仅检查内部状态标志，还检查 socket 实际可用性
+2. **NOOP 心跳**：定期发送 NOOP 命令验证连接存活
+3. **自动恢复**：检测到僵尸连接后自动清理并重连
 
 ### 渲染配置
 

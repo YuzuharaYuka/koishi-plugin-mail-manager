@@ -234,7 +234,7 @@ export async function htmlToImage(
       cleanupCache()
     }
 
-    logger.info(`Converted HTML to image: ${opts.width}x${contentHeight} (${opts.format})`)
+    logger.debug(`渲染图片: ${opts.width}x${contentHeight}`)
     return buffer
 
   } catch (error) {
@@ -310,8 +310,6 @@ function buildFullHtml(content: string, opts: Required<Html2ImageOptions>): stri
           img.onerror = function() {
             this.classList.add('img-error');
             this.alt = '[图片加载失败: ' + (this.alt || this.src.substring(0, 50)) + ']';
-            // 不完全移除 src，以便调试
-            console.warn('Failed to load image:', this.src);
           };
         });
       </script>
@@ -398,7 +396,6 @@ function buildFullHtml(content: string, opts: Required<Html2ImageOptions>): stri
       img.onerror = function() {
         this.classList.add('img-error');
         this.alt = '[图片加载失败: ' + (this.alt || this.src.substring(0, 50)) + ']';
-        console.warn('Failed to load image:', this.src);
       };
     });
   </script>

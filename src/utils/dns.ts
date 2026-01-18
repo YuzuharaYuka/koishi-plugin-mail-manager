@@ -171,9 +171,9 @@ export async function resolveDns(
 
       if (!shouldRetry || attempt >= opts.maxAttempts) {
         if (selectedResult.isPreferred) {
-          log?.info('[DNS] Found preferred IP on attempt %d: %s', attempt, selectedResult.address)
+          log?.debug('[DNS] Found preferred IP on attempt %d: %s', attempt, selectedResult.address)
         } else if (addresses.length > 1) {
-          log?.info('[DNS] Selected IP: %s (from %d options)', selectedResult.address, addresses.length)
+          log?.debug('[DNS] Selected IP: %s (from %d options)', selectedResult.address, addresses.length)
         }
         break
       }
@@ -376,7 +376,7 @@ export async function testMultipleIps(
     return [{ address: addresses[0], reachable: true, latency: 0 }]
   }
 
-  logger?.info('[IP-TEST] Testing connectivity for %d IPs on port %d...', addresses.length, port)
+  logger?.debug('[IP-TEST] Testing connectivity for %d IPs on port %d...', addresses.length, port)
 
   const results: IpTestResult[] = []
 
@@ -398,7 +398,7 @@ export async function testMultipleIps(
 
   // 记录测试结果
   const reachableCount = results.filter(r => r.reachable).length
-  logger?.info('[IP-TEST] Results: %d/%d reachable', reachableCount, results.length)
+  logger?.debug('[IP-TEST] Results: %d/%d reachable', reachableCount, results.length)
 
   results.forEach((r, idx) => {
     if (r.reachable) {
@@ -515,7 +515,7 @@ export async function resolveDnsWithConnectivityTest(
   const reachableCount = testResults.filter(r => r.reachable).length
 
   if (reachableCount === 0 && enableBackupDns) {
-    log?.warn('[DNS] All IPs unreachable for %s, trying backup DNS servers...', hostname)
+    log?.warn('[DNS] %s 所有 IP 不可达，尝试备用 DNS...', hostname)
 
     try {
       // 尝试使用备用 DNS 服务器
@@ -525,7 +525,7 @@ export async function resolveDnsWithConnectivityTest(
       const allUniqueAddresses = Array.from(new Set([...dnsResult.allAddresses, ...backupAddresses]))
 
       if (allUniqueAddresses.length > dnsResult.allAddresses.length) {
-        log?.info('[DNS] Backup DNS found %d additional IPs, testing...',
+        log?.debug('[DNS] Backup DNS found %d additional IPs',
           allUniqueAddresses.length - dnsResult.allAddresses.length)
 
         // 只测试新的 IP
@@ -540,10 +540,10 @@ export async function resolveDnsWithConnectivityTest(
         testResults = [...testResults, ...newTestResults]
         dnsResult.allAddresses = allUniqueAddresses
       } else {
-        log?.warn('[DNS] Backup DNS returned same IPs, no new options available')
+        log?.debug('[DNS] Backup DNS 返回相同 IP')
       }
     } catch (err) {
-      log?.warn('[DNS] Backup DNS resolution failed: %s', (err as Error).message)
+      log?.debug('[DNS] Backup DNS 失败: %s', (err as Error).message)
     }
   }
 
@@ -555,11 +555,10 @@ export async function resolveDnsWithConnectivityTest(
   const proxyRequired = finalReachableCount === 0
 
   if (proxyRequired) {
-    log?.warn('[DNS] ⚠️  All %d IPs unreachable for %s. Proxy/VPN required for this service.',
-      testResults.length, hostname)
+    log?.warn('[DNS] %s 所有 IP 不可达，可能需要代理', hostname)
   }
 
-  log?.info('[DNS] Selected best IP: %s (latency: %s%s)',
+  log?.debug('[DNS] Selected best IP: %s (latency: %s%s)',
     bestIp.address,
     bestIp.latency === Infinity ? 'N/A' : `${bestIp.latency}ms`,
     proxyRequired ? ', PROXY REQUIRED' : ''

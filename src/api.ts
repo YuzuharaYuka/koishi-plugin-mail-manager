@@ -50,7 +50,7 @@ const logger = new LoggerProxy()
  */
 export function registerConsoleApi(ctx: Context, config: Config): void {
   new ApiRegistrar(ctx, config).register()
-  logger.info('API 已注册')
+  logger.debug('API 已注册')
 }
 
 /**

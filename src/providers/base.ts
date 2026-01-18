@@ -30,6 +30,16 @@ export interface ProviderConfig {
 }
 
 /**
+ * 邮箱监听策略
+ *
+ * - 'idle-only': 仅使用 IDLE，适合 IDLE 可靠的服务器
+ * - 'poll-only': 仅使用轮询，禁用 IDLE
+ * - 'hybrid': 同时使用 IDLE 和轮询，IDLE 为主，轮询为备选（默认）
+ * - 'idle-with-fallback': 优先 IDLE，IDLE 失败时自动切换到轮询
+ */
+export type ListenStrategy = 'idle-only' | 'poll-only' | 'hybrid' | 'idle-with-fallback'
+
+/**
  * 邮箱提供商特性
  */
 export interface ProviderFeatures {
@@ -47,6 +57,48 @@ export interface ProviderFeatures {
   requiresHeartbeat: boolean
   /** 心跳间隔(ms) */
   heartbeatInterval?: number
+
+  // ============ 新增：IDLE 和轮询相关配置 ============
+
+  /**
+   * IDLE 最大持续时间(ms)
+   * 超过此时间后 IDLE 会自动重启，防止服务器静默断开
+   * 默认: 29分钟 (RFC 2177 建议不超过 29 分钟)
+   */
+  maxIdleTime?: number
+
+  /**
+   * 服务器已知的 IDLE 超时时间(ms)
+   * 用于在服务器超时前主动重启 IDLE
+   */
+  serverIdleTimeout?: number
+
+  /**
+   * 邮件监听策略
+   * 默认: 'hybrid'
+   */
+  listenStrategy?: ListenStrategy
+
+  /**
+   * 轮询间隔(ms)
+   * 仅在 listenStrategy 包含轮询时有效
+   * 默认: 120秒 (2分钟)
+   */
+  pollInterval?: number
+
+  /**
+   * 连接存活检测间隔(ms)
+   * 检测连接是否仍然有效
+   * 默认: 60秒
+   */
+  connectionCheckInterval?: number
+
+  /**
+   * IDLE 可靠性评分 (0-100)
+   * 高分表示 IDLE 实现可靠，可以减少轮询
+   * 低分表示 IDLE 可能不可靠，需要更频繁的轮询
+   */
+  idleReliability?: number
 }
 
 /**
@@ -211,6 +263,13 @@ export class GenericMailProvider extends MailProviderAdapter {
       maxConcurrentConnections: 3,
       recommendedBatchSize: 50,
       requiresHeartbeat: false,
+
+      // 通用邮箱使用保守的混合策略
+      maxIdleTime: 20 * 60 * 1000, // 20分钟，保守值
+      listenStrategy: 'hybrid', // 混合模式，最安全
+      pollInterval: 120 * 1000, // 2分钟轮询
+      connectionCheckInterval: 60 * 1000, // 60秒连接检测
+      idleReliability: 60, // 中等可靠性（未知服务器）
     }
   }
 }

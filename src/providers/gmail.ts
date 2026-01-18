@@ -113,6 +113,14 @@ export class GmailProvider extends MailProviderAdapter {
       maxConcurrentConnections: 10,
       recommendedBatchSize: 100,
       requiresHeartbeat: false,
+
+      // Gmail 的 IDLE 实现非常可靠
+      // 使用 idle-only 策略以减少不必要的轮询
+      maxIdleTime: 29 * 60 * 1000, // 29分钟（RFC 2177 建议）
+      listenStrategy: 'idle-only', // Gmail IDLE 可靠，无需轮询
+      pollInterval: 300 * 1000, // 5分钟（仅作为最后的备选）
+      connectionCheckInterval: 90 * 1000, // 90秒连接检测
+      idleReliability: 95, // 非常可靠
     }
   }
 

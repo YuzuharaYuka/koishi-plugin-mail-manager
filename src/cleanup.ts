@@ -64,7 +64,7 @@ export async function cleanExpiredMails(
   let totalDeleted = 0
 
   if (reportProgress) {
-    await reportProgress(`Found ${expiredMailCount} expired mails. Starting cleanup...`)
+    await reportProgress(`发现 ${expiredMailCount} 封过期邮件，开始清理...`)
   }
 
   while (totalDeleted < expiredMailCount) {
@@ -89,7 +89,7 @@ export async function cleanExpiredMails(
 
     // Report progress periodically
     if (reportProgress && totalDeleted % 500 === 0) {
-      await reportProgress(`Cleaned ${totalDeleted}/${expiredMailCount} mails...`)
+      await reportProgress(`已清理 ${totalDeleted}/${expiredMailCount}...`)
     }
 
     // Small delay to prevent database starvation
@@ -125,25 +125,23 @@ export function scheduleAutoCleanup(ctx: Context, config: { autoCleanup: boolean
 
   const runCleanup = async () => {
     try {
-      logger.info('[Auto Cleanup] Starting scheduled cleanup task...')
+      logger.debug('[AutoClean] 开始清理...')
 
       const deletedCount = await cleanExpiredMails(ctx, config.mailRetentionDays, {
-        reportProgress: async (msg) => logger.info(`[Auto Cleanup] ${msg}`)
+        reportProgress: async (msg) => logger.debug(`[AutoClean] ${msg}`)
       })
 
       if (deletedCount > 0) {
-        logger.info(`[Auto Cleanup] Completed. Deleted ${deletedCount} expired mails.`)
-      } else {
-        logger.debug('[Auto Cleanup] No expired mails found.')
+        logger.info(`[自动清理] 已删除 ${deletedCount} 封过期邮件`)
       }
     } catch (error) {
-      logger.error(`[Auto Cleanup] Failed: ${(error as Error).message}`)
+      logger.error(`[自动清理] 失败: ${(error as Error).message}`)
     }
   }
 
   // Delay the first run to allow the application to start up fully
   ctx.setTimeout(() => {
-    runCleanup().catch(err => logger.error(`[Auto Cleanup] Initial run failed: ${err.message}`))
+    runCleanup().catch(err => logger.error(`[自动清理] 失败: ${err.message}`))
   }, 30000)
 
   // Schedule the recurring task

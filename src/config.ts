@@ -16,38 +16,34 @@ export interface Config {
   connectivityTestTimeout: number
 }
 
-// 生成默认加密密钥（仅用于首次配置）
 const generateDefaultKey = () => randomBytes(32).toString('base64')
 
 export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
-    debug: Schema.boolean().default(false)
-      .description('调试模式'),
+    debug: Schema.boolean().default(false).description('调试模式'),
     encryptionKey: Schema.string().default(generateDefaultKey())
-      .description('密码加密密钥(修改后需重新配置所有邮箱密码)').role('secret'),
+      .description('密码加密密钥').role('secret'),
     mailRetentionDays: Schema.number().default(30).min(0)
-      .description('邮件保留天数(0为永久保留)'),
+      .description('保留天数 (0=永久)'),
     autoCleanup: Schema.boolean().default(true)
-      .description('自动清理过期邮件(每24小时检查一次)'),
-  }).description('邮件管理'),
+      .description('自动清理过期邮件'),
+  }).description('基础设置'),
 
   Schema.object({
-    autoReconnect: Schema.boolean().default(true)
-      .description('自动重连(连接断开后自动尝试重新连接)'),
+    autoReconnect: Schema.boolean().default(true).description('断线自动重连'),
     maxReconnectAttempts: Schema.number().default(10).min(1).max(999)
-      .description('最大重连尝试次数'),
+      .description('最大重连次数'),
     reconnectInterval: Schema.number().default(30).min(5).max(300)
-      .description('重连基础间隔(秒)'),
+      .description('重连间隔 (秒)'),
     connectionTimeout: Schema.number().default(30).min(10).max(120)
-      .description('连接超时时间(秒)'),
-    healthCheckEnabled: Schema.boolean().default(true)
-      .description('启用健康检查(定期检测连接状态并自动重连)'),
+      .description('连接超时 (秒)'),
+    healthCheckEnabled: Schema.boolean().default(true).description('健康检查'),
     healthCheckInterval: Schema.number().default(300).min(60).max(3600)
-      .description('健康检查间隔(秒)'),
+      .description('检查间隔 (秒)'),
     enableConnectivityTest: Schema.boolean().default(true)
-      .description('启用 IP 连通性测试(DNS 解析后自动测试所有 IP 并选择延迟最低的)'),
+      .description('IP 连通性测试'),
     connectivityTestTimeout: Schema.number().default(3000).min(1000).max(10000)
-      .description('单个 IP 连通性测试超时时间(毫秒)'),
+      .description('测试超时 (毫秒)'),
   }).description('连接设置'),
 ])
 

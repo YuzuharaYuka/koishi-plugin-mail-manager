@@ -107,7 +107,7 @@ export async function createRule(data: Partial<ForwardRule>): Promise<ForwardRul
     updatedAt: now,
   })
 
-  logger.info(LogModule.RULE, `创建规则 "${rule.name}"`)
+  logger.debug(LogModule.RULE, `创建规则 "${rule.name}"`)
   invalidateRulesCache()
   broadcastRulesUpdate()
 
@@ -138,7 +138,7 @@ export async function deleteRule(id: number): Promise<void> {
   invalidateRulesCache()
   broadcastRulesUpdate()
 
-  logger.info(LogModule.RULE, `删除规则 #${id}`)
+  logger.debug(LogModule.RULE, `删除规则 #${id}`)
 }
 
 // ============ 规则测试 ============

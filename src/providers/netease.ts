@@ -4,6 +4,7 @@
  * - 需要发送 IMAP ID 标识
  * - IDLE 超时非常短（约 200 秒），需要频繁发送 NOOP 保活
  * - 授权码登录
+ * - IDLE 实现不完全可靠，需要轮询作为备选
  */
 
 import type { ImapFlowOptions } from 'imapflow'
@@ -15,8 +16,10 @@ import { MailProviderAdapter, type ProviderFeatures } from './base'
  * 为了保持连接稳定，我们需要在此之前发送 NOOP 命令
  * 使用 90 秒的心跳间隔，留有足够的安全余量
  */
-const NETEASE_IDLE_TIMEOUT = 200000 // 200秒
-const NETEASE_HEARTBEAT_INTERVAL = 90000 // 90秒，远小于 IDLE 超时
+const NETEASE_IDLE_TIMEOUT = 200 * 1000 // 200秒 - 服务器超时
+const NETEASE_MAX_IDLE_TIME = 150 * 1000 // 150秒 - 主动重启 IDLE，在超时前
+const NETEASE_HEARTBEAT_INTERVAL = 90 * 1000 // 90秒 - 心跳间隔
+const NETEASE_POLL_INTERVAL = 60 * 1000 // 60秒 - 轮询间隔（比默认更短，因为 IDLE 不可靠）
 
 export class NeteaseMailProvider extends MailProviderAdapter {
   readonly name = 'netease'
@@ -73,6 +76,15 @@ export class NeteaseMailProvider extends MailProviderAdapter {
       // 网易邮箱必须启用心跳，且间隔要短于其 IDLE 超时
       requiresHeartbeat: true,
       heartbeatInterval: NETEASE_HEARTBEAT_INTERVAL,
+
+      // 网易邮箱的 IDLE 实现不够可靠，使用混合模式
+      // 设置较短的 maxIdleTime 以在服务器超时前重启 IDLE
+      maxIdleTime: NETEASE_MAX_IDLE_TIME,
+      serverIdleTimeout: NETEASE_IDLE_TIMEOUT,
+      listenStrategy: 'hybrid', // 使用混合模式确保不遗漏邮件
+      pollInterval: NETEASE_POLL_INTERVAL, // 60秒轮询
+      connectionCheckInterval: 45 * 1000, // 45秒连接检测
+      idleReliability: 50, // 中等可靠性
     }
   }
 

@@ -1,53 +1,61 @@
 /**
  * 邮件管理插件 - CSS 变量定义
- * 现代化大厂简洁风格配色系统
+ * 适配 Koishi 主题系统（支持 html.dark 深色模式）
  */
 
-// k-layout 会渲染成带有 .k-layout 类的容器
-// 我们的 class="mail-listener-app" 会附加在 k-layout 上
+// 浅色主题（默认）
 .mail-listener-app {
-  // 主题色 - 更柔和的蓝色
-  --ml-primary: #1677ff;
+  // 主题色 - 使用 Koishi 主题变量
+  --ml-primary: var(--k-color-primary, #1677ff);
   --ml-primary-rgb: 22, 119, 255;
-  --ml-primary-hover: #4096ff;
+  --ml-primary-hover: var(--k-color-primary-tint, #4096ff);
   --ml-primary-light: #e6f4ff;
   --ml-primary-border: #91caff;
 
-  --ml-success: #52c41a;
+  --ml-success: var(--k-color-success, #52c41a);
   --ml-success-light: #f6ffed;
   --ml-success-border: #b7eb8f;
 
-  --ml-warning: #faad14;
+  --ml-warning: var(--k-color-warning, #faad14);
   --ml-warning-light: #fffbe6;
+  --ml-warning-border: #ffe58f;
 
-  --ml-error: #ff4d4f;
-  --ml-error-light: #fff2f0;
-  --ml-error-border: #ffccc7;
+  --ml-danger: var(--k-color-danger, #ff4d4f);
+  --ml-danger-light: #fff2f0;
+  --ml-danger-border: #ffccc7;
 
-  // 文本色
-  --ml-text: var(--k-color-text);
-  --ml-text-secondary: var(--k-color-text-description);
-  --ml-text-tertiary: rgba(0, 0, 0, 0.25);
+  // info 蓝色系 - 用于信息提示、徽章等
+  --ml-info: #1976d2;
+  --ml-info-light: #e3f2fd;
+  --ml-info-border: #90caf9;
 
-  // 背景色
-  --ml-bg: var(--k-card-bg);
-  --ml-bg-base: var(--k-color-bg-1);
-  --ml-hover: rgba(0, 0, 0, 0.04);
-  --ml-bg-hover: var(--k-hover-bg);
-  --ml-bg-container: #ffffff;
+  // error 与 danger 保持别名关系
+  --ml-error: var(--ml-danger);
+  --ml-error-light: var(--ml-danger-light);
+  --ml-error-border: var(--ml-danger-border);
 
-  // 边框色
-  --ml-border: var(--k-color-border);
-  --ml-border-light: rgba(5, 5, 5, 0.06);
+  // 文本色 - 使用 Koishi 变量
+  --ml-text: var(--fg1, #28282c);
+  --ml-text-secondary: var(--fg2, rgba(40, 40, 44, 0.7));
+  --ml-text-tertiary: var(--fg3, rgba(40, 40, 44, 0.4));
+
+  // 背景色 - 使用 Koishi 变量
+  --ml-bg: var(--k-card-bg, #ffffff);
+  --ml-bg-base: var(--bg1, #f9f9fa);
+  --ml-hover: var(--bg3, #e3e3e5);
+  --ml-bg-hover: var(--k-hover-bg, #e3e3e5);
+  --ml-bg-container: var(--bg0, #ffffff);
+
+  // 边框色 - 使用 Koishi 变量
+  --ml-border: var(--k-color-border, #c8c9cc);
+  --ml-border-light: var(--k-color-divider, #e0e4e8);
   --ml-border-secondary: rgba(5, 5, 5, 0.12);
 
   // 阴影系统
   --ml-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03),
                   0 1px 6px -1px rgba(0, 0, 0, 0.02),
                   0 2px 4px 0 rgba(0, 0, 0, 0.02);
-  --ml-shadow: 0 1px 2px -2px rgba(0, 0, 0, 0.16),
-               0 3px 6px 0 rgba(0, 0, 0, 0.12),
-               0 5px 12px 4px rgba(0, 0, 0, 0.09);
+  --ml-shadow: var(--k-card-shadow, 0 1px 2px -2px rgba(0, 0, 0, 0.16), 0 3px 6px 0 rgba(0, 0, 0, 0.12), 0 5px 12px 4px rgba(0, 0, 0, 0.09));
   --ml-shadow-lg: 0 6px 16px 0 rgba(0, 0, 0, 0.08),
                   0 3px 6px -4px rgba(0, 0, 0, 0.12),
                   0 9px 28px 8px rgba(0, 0, 0, 0.05);
@@ -64,8 +72,8 @@
   --ml-spacing-lg: 24px;
   --ml-spacing-xl: 32px;
 
-  // 过渡动画
-  --ml-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  // 过渡动画 - 与 Koishi 保持一致
+  --ml-transition: var(--color-transition, all 0.2s cubic-bezier(0.4, 0, 0.2, 1));
   --ml-transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
   // 代码编辑器颜色
@@ -77,15 +85,46 @@
   }
 }
 
-// 深色模式支持
-@media (prefers-color-scheme: dark) {
-  .mail-listener-app {
-    --ml-bg-container: var(--k-card-bg, #1f1f1f);
-    --ml-bg-base: var(--k-color-bg-1, #141414);
-    --ml-bg-hover: var(--k-hover-bg, rgba(255, 255, 255, 0.08));
-    --ml-text-tertiary: rgba(255, 255, 255, 0.25);
-    --ml-border-light: rgba(255, 255, 255, 0.08);
-    --ml-border-secondary: rgba(255, 255, 255, 0.12);
-    --ml-hover: rgba(255, 255, 255, 0.04);
-  }
+// 深色模式支持 - 使用 Koishi 的 html.dark 类
+html.dark .mail-listener-app {
+  // 主题色
+  --ml-primary-light: rgba(22, 119, 255, 0.15);
+  --ml-primary-border: rgba(22, 119, 255, 0.5);
+
+  --ml-success-light: rgba(82, 196, 26, 0.15);
+  --ml-success-border: rgba(82, 196, 26, 0.5);
+
+  --ml-warning-light: rgba(250, 173, 20, 0.15);
+  --ml-warning-border: rgba(250, 173, 20, 0.5);
+
+  --ml-danger-light: rgba(255, 77, 79, 0.15);
+  --ml-danger-border: rgba(255, 77, 79, 0.5);
+
+  // info 蓝色系
+  --ml-info: #42a5f5;
+  --ml-info-light: rgba(25, 118, 210, 0.15);
+  --ml-info-border: rgba(25, 118, 210, 0.5);
+
+  // 文本色
+  --ml-text: var(--fg1, rgba(255, 255, 245, 0.9));
+  --ml-text-secondary: var(--fg2, rgba(255, 255, 245, 0.6));
+  --ml-text-tertiary: var(--fg3, rgba(255, 255, 245, 0.4));
+
+  // 背景色
+  --ml-bg: var(--k-card-bg, #252529);
+  --ml-bg-base: var(--bg1, #1e1e20);
+  --ml-hover: var(--bg3, #313136);
+  --ml-bg-hover: var(--k-hover-bg, #313136);
+  --ml-bg-container: var(--bg2, #252529);
+
+  // 边框色
+  --ml-border: var(--k-color-border, rgba(82, 82, 89, 0.8));
+  --ml-border-light: var(--k-color-divider, rgba(82, 82, 89, 0.5));
+  --ml-border-secondary: rgba(255, 255, 255, 0.12);
+
+  // 阴影 - 深色模式使用更柔和的阴影
+  --ml-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --ml-shadow-lg: 0 6px 16px 0 rgba(0, 0, 0, 0.32),
+                  0 3px 6px -4px rgba(0, 0, 0, 0.48),
+                  0 9px 28px 8px rgba(0, 0, 0, 0.2);
 }

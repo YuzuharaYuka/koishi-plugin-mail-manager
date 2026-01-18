@@ -47,6 +47,14 @@ export class QQMailProvider extends MailProviderAdapter {
       maxConcurrentConnections: 3,
       recommendedBatchSize: 50,
       requiresHeartbeat: false,
+
+      // QQ 邮箱的 IDLE 比较可靠，但偶尔会有问题
+      // 使用 idle-with-fallback 策略：优先 IDLE，失败时自动切换
+      maxIdleTime: 25 * 60 * 1000, // 25分钟
+      listenStrategy: 'idle-with-fallback',
+      pollInterval: 120 * 1000, // 2分钟轮询（作为备选）
+      connectionCheckInterval: 60 * 1000, // 60秒连接检测
+      idleReliability: 75, // 较高可靠性
     }
   }
 
