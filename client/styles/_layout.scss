@@ -96,9 +96,18 @@
 .ml-content {
   flex: 1;
   min-height: 0;
-  overflow: auto; // 允许内容区滚动
+  overflow: hidden; // 不在这里滚动，让子组件自己处理
   padding: var(--ml-spacing-lg);
   background: var(--ml-bg-base);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+
+  // 子视图占满剩余空间
+  > * {
+    flex: 1;
+    min-height: 0;
+  }
 }
 
 // ========== 卡片样式 ==========

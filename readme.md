@@ -1,176 +1,148 @@
-# koishi-plugin-mail-listener
+# koishi-plugin-mail-manager
 
-[![npm](https://img.shields.io/npm/v/koishi-plugin-mail-listener?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-mail-listener)
+[![npm](https://img.shields.io/npm/v/koishi-plugin-mail-manager?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-mail-manager)
 
-邮件监听与转发插件，支持 WebUI 管理、自定义渲染和多种转发元素选择。
+邮件监听与自动转发插件。支持多账号 IMAP 监听、规则匹配自动转发、WebUI 管理界面。
 
 ## 功能特性
 
-- 📧 **多账号管理**：支持同时监听多个邮箱账户（IMAP 协议）
-- 💾 **邮件存储**：自动保存接收到的邮件到数据库
-- 🔄 **智能转发**：根据规则自动将邮件转发到指定频道
-- 🎨 **自定义样式**：支持自定义 CSS 渲染邮件内容
-- 🖼️ **多种渲染模式**：支持纯文本、HTML 图片、混合模式
-- ✨ **元素选择**：自定义选择要转发的邮件元素（主题、发件人、正文等）
-- 🎯 **灵活匹配**：支持多种匹配条件（主题、发件人、正文等），支持 AND/OR 逻辑
-- 📊 **优先级控制**：规则支持优先级排序，精确控制匹配顺序
-- 🔁 **失败重试**：支持转发失败自动重试机制
-- 👀 **预览功能**：转发前可预览渲染效果
+- 多账号同时监听，支持主流邮箱提供商
+- 基于规则的条件匹配与自动转发
+- 三种渲染模式：纯文本、HTML 图片、混合模式
+- 灵活的转发元素配置
+- 连接健康检查与自动重连
+- 邮件数据持久化与定期清理
 
 ## 安装
 
+插件市场安装或者使用 npm 安装：
 ```bash
-npm install koishi-plugin-mail-listener
+npm install koishi-plugin-mail-manager
 ```
 
-## 依赖
+## 依赖要求
 
-- `@koishijs/plugin-console` - 控制台插件
-- `@koishijs/plugin-server` - 服务器插件
-- `koishi-plugin-puppeteer`（可选）- 用于 HTML/Markdown 渲染为图片
+### 必需服务
 
-## 使用说明
+- `@koishijs/plugin-console` - 提供 WebUI 管理界面
+- `@koishijs/plugin-server` - 提供 HTTP 服务支持
 
-### 1. 添加邮箱账号
+### 可选服务
 
-1. 在控制台中打开「邮件监听」页面
-2. 点击「添加账号」按钮
-3. 填写邮箱信息：
-   - **账号名称**：用于标识的名称
-   - **邮箱地址**：你的邮箱地址
-   - **IMAP 服务器**：邮箱的 IMAP 服务器地址
-   - **端口**：IMAP 端口（通常为 993）
-   - **用户名**：登录用户名（通常是邮箱地址）
-   - **密码/授权码**：邮箱密码或应用授权码
-4. 点击「测试连接」验证配置
-5. 保存并启用账号
+- `@koishijs/plugin-puppeteer` - 用于 HTML/Markdown 渲染为图片（image 和 hybrid 模式需要）
 
-### 2. 配置转发规则
+## 快速开始
 
-1. 切换到「转发规则」标签页
-2. 点击「添加规则」
-3. 配置基础信息：
-   - **规则名称**：用于识别规则
-   - **优先级**：数值越小优先级越高（默认 100）
-   - **关联账号**：可选择特定账号或所有账号
-4. 配置匹配条件：
-   - **条件逻辑**：选择 AND（全部满足）或 OR（任一满足）
-   - **条件类型**：主题/发件人/正文包含或正则匹配
-   - **取反选项**：可对条件结果取反
-5. 添加转发目标：
-   - 选择平台和 Bot
-   - 填写频道/群组 ID
-6. 配置高级选项：
-   - **转发延迟**：避免过快发送被限流
-   - **失败策略**：选择部分成功/全部成功才标记
-   - **重试设置**：配置失败重试次数和间隔
+1. 在控制台打开「邮件管理」页面
+2. 添加邮箱账号并配置 IMAP 服务器信息
+3. 创建转发规则，设置匹配条件和转发目标
+4. 启用账号开始监听新邮件
 
-### 3. 预览效果
+## 配置选项
 
-1. 切换到「预览」标签页
-2. 选择一封已接收的邮件
-3. 调整渲染模式和元素配置
-4. 点击「生成预览」查看效果
+### 基础设置
 
-## 转发规则详解
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| debug | boolean | false | 启用调试日志输出 |
+| encryptionKey | string | 自动生成 | 密码加密密钥 |
+| mailRetentionDays | number | 30 | 邮件保留天数，0 表示永久保留 |
+| autoCleanup | boolean | true | 自动清理过期邮件 |
 
-### 条件逻辑
+### 连接设置
 
-规则支持两种条件组合方式：
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| autoReconnect | boolean | true | 连接断开时自动重连 |
+| maxReconnectAttempts | number | 10 | 最大重连尝试次数 |
+| reconnectInterval | number | 30 | 重连间隔（秒） |
+| connectionTimeout | number | 30 | 连接超时时间（秒） |
+| healthCheckEnabled | boolean | true | 定期健康检查 |
+| healthCheckInterval | number | 300 | 健康检查间隔（秒） |
+| enableConnectivityTest | boolean | true | 启用 IP 连通性测试 |
+| connectivityTestTimeout | number | 3000 | 连通性测试超时（毫秒） |
 
-| 逻辑 | 说明 | 示例 |
-|------|------|------|
-| `and` | 所有条件必须同时满足 | 主题包含 "通知" **且** 发件人包含 "admin" |
-| `or` | 满足任一条件即可 | 主题包含 "告警" **或** 主题包含 "警报" |
+## 邮箱服务器配置
 
-### 优先级
+### 主流邮箱 IMAP 服务器
 
-- 数值越小优先级越高
-- 默认优先级为 100
-- 当一封邮件匹配多个规则时，按优先级顺序处理第一个匹配的规则
+| 邮箱提供商 | IMAP 服务器 | 端口 | TLS | 说明 |
+|-----------|------------|------|-----|------|
+| QQ 邮箱 | imap.qq.com | 993 | 是 | 需使用授权码登录 |
+| 163 邮箱 | imap.163.com | 993 | 是 | 需使用授权码登录 |
+| 126 邮箱 | imap.126.com | 993 | 是 | 需使用授权码登录 |
+| Gmail | imap.gmail.com | 993 | 是 | 需使用应用专用密码 |
+| Outlook/Hotmail | outlook.office365.com | 993 | 是 | 可直接使用账号密码 |
+| iCloud | imap.mail.me.com | 993 | 是 | 需使用应用专用密码 |
+| Yahoo | imap.mail.yahoo.com | 993 | 是 | 需使用应用密码 |
+
+### 授权码获取方式
+
+- **QQ 邮箱**：设置 - 账户 - POP3/IMAP/SMTP 服务 - 开启 IMAP 服务并生成授权码
+- **163/126 邮箱**：设置 - POP3/SMTP/IMAP - 开启 IMAP 服务并生成授权码
+- **Gmail**：Google 账号设置 - 安全性 - 两步验证 - 应用专用密码
+- **iCloud**：Apple ID - 安全 - 应用专用密码
+
+## 转发规则
+
+### 渲染模式
+
+| 模式 | 说明 | 依赖 Puppeteer |
+|------|------|----------------|
+| text | 纯文本模式，根据元素配置发送纯文本消息 | 否 |
+| image | 图片模式，将邮件 HTML 内容渲染为图片 | 是 |
+| hybrid | 混合模式，摘要文本加正文图片 | 是 |
+
+### 转发元素
+
+可配置的转发元素包括：
+
+- subject - 邮件主题
+- from - 发件人信息
+- to - 收件人信息
+- date - 接收日期
+- body - 邮件正文
+- attachments - 附件列表
+- separator - 分隔线
+- custom - 自定义模板内容
+
+### 匹配条件
+
+| 条件类型 | 说明 |
+|---------|------|
+| subject_contains | 主题包含指定文本 |
+| subject_regex | 主题匹配正则表达式 |
+| from_contains | 发件人包含指定文本 |
+| from_regex | 发件人匹配正则表达式 |
+| to_contains | 收件人包含指定文本 |
+| body_contains | 正文包含指定文本 |
+| body_regex | 正文匹配正则表达式 |
+| all | 匹配所有邮件 |
+
+### 条件组合逻辑
+
+- **and**: 所有条件必须同时满足
+- **or**: 满足任意一个条件即可
+
+支持条件取反，可实现复杂的过滤逻辑。
 
 ### 失败处理策略
 
 | 策略 | 说明 |
 |------|------|
-| `mark-partial` | 部分目标发送成功就标记为已转发（默认） |
-| `require-all` | 所有目标都成功才标记为已转发 |
-| `retry-failed` | 记录失败目标，支持后续重试 |
+| mark-partial | 部分目标转发成功即标记为已转发（默认） |
+| require-all | 所有目标转发成功才标记为已转发 |
+| retry-failed | 记录失败目标，支持后续重试 |
 
-### 重试机制
+## 命令
 
-- **重试次数**：转发失败后的重试次数（默认 0，不重试）
-- **重试间隔**：每次重试之间的等待时间（默认 5000ms）
-- 重试只针对失败的目标，已成功的不会重复发送
-
-## 配置项
-
-| 配置项 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| mailRetentionDays | number | 30 | 邮件保留天数（0 为永久保留） |
-| autoCleanup | boolean | true | 自动清理过期邮件 |
-| autoReconnect | boolean | true | 连接断开后自动重连 |
-| maxReconnectAttempts | number | 10 | 最大重连尝试次数 |
-| reconnectInterval | number | 30 | 重连基础间隔（秒） |
-| connectionTimeout | number | 30 | 连接超时时间（秒） |
-| healthCheckEnabled | boolean | true | 启用连接健康检查 |
-| healthCheckInterval | number | 60 | 健康检查间隔（秒） |
-
-## 邮件监听机制
-
-插件采用智能的 IDLE + 轮询混合机制监听新邮件，针对不同邮箱服务商进行了优化：
-
-### 监听策略
-
-| 策略 | 说明 | 适用场景 |
-|------|------|----------|
-| `idle-only` | 仅使用 IDLE | Gmail 等 IDLE 实现可靠的服务器 |
-| `poll-only` | 仅使用轮询 | IDLE 完全不可用的服务器 |
-| `hybrid` | 同时使用 IDLE 和轮询 | 通用场景，最安全（默认） |
-| `idle-with-fallback` | 优先 IDLE，失败时切换轮询 | QQ 邮箱等 IDLE 基本可靠的服务器 |
-
-### 各邮箱服务商配置
-
-| 邮箱 | 监听策略 | IDLE 超时 | 轮询间隔 | 可靠性 |
-|------|----------|----------|----------|--------|
-| Gmail | `idle-only` | 29 分钟 | 5 分钟(备选) | 95% |
-| QQ 邮箱 | `idle-with-fallback` | 25 分钟 | 2 分钟 | 75% |
-| 163/126 邮箱 | `hybrid` | 150 秒 | 60 秒 | 50% |
-| 通用 | `hybrid` | 20 分钟 | 2 分钟 | 60% |
-
-### 僵尸连接检测
-
-插件包含智能的僵尸连接检测机制：
-
-1. **多重状态检查**：不仅检查内部状态标志，还检查 socket 实际可用性
-2. **NOOP 心跳**：定期发送 NOOP 命令验证连接存活
-3. **自动恢复**：检测到僵尸连接后自动清理并重连
-
-### 渲染配置
-
-| 配置项 | 类型 | 默认值 | 说明 |
-|--------|------|--------|------|
-| imageWidth | number | 800 | 渲染图片宽度 |
-| backgroundColor | string | #ffffff | 背景颜色 |
-| textColor | string | #333333 | 文本颜色 |
-| fontSize | number | 14 | 字体大小 |
-| padding | number | 20 | 内边距 |
-| showBorder | boolean | true | 显示边框 |
-| borderColor | string | #e0e0e0 | 边框颜色 |
-
-## 常见邮箱 IMAP 配置
-
-| 邮箱 | IMAP 服务器 | 端口 |
-|------|-------------|------|
-| QQ 邮箱 | imap.qq.com | 993 |
-| 163 邮箱 | imap.163.com | 993 |
-| Gmail | imap.gmail.com | 993 |
-| Outlook | outlook.office365.com | 993 |
-
-> **注意**：部分邮箱需要开启 IMAP 服务并使用授权码而非密码登录。
+```
+mail.cleanup [-e|-a] [-d]  清理邮件数据库
+  -e, --expired              清理过期邮件
+  -a, --all                  清理所有邮件
+  -d, --dry-run             预览清理数量，不实际删除
+```
 
 ## 许可证
 
 MIT License
-
-

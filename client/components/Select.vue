@@ -171,11 +171,14 @@ watch(isOpen, (newVal) => {
 <style scoped>
 .ml-select-wrapper {
   position: relative;
-  display: inline-block;
+  display: block;
+  width: 100%;
   min-width: 140px;
 
   &.small {
     min-width: 80px;
+    width: auto;
+    display: inline-block;
 
     .ml-select-trigger {
       padding: 6px 10px;

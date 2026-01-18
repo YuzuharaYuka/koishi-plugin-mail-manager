@@ -111,8 +111,5 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--ml-border);
 }
 
-.ml-content {
-  padding: 16px 20px;
-  overflow-y: auto;
-}
+/* 不在 scoped 中重复定义 ml-content，使用全局样式 */
 </style>

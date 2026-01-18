@@ -49,13 +49,11 @@
         <div v-if="forwardMode === 'rule'" class="rule-select-section">
           <div class="ml-form-group">
             <label class="ml-label">选择转发规则</label>
-            <select v-model="selectedRuleId" class="ml-select">
-              <option :value="undefined" disabled>请选择规则...</option>
-              <option v-for="rule in enabledRules" :key="rule.id" :value="rule.id">
-                {{ rule.name }}
-                <template v-if="rule.description"> - {{ rule.description }}</template>
-              </option>
-            </select>
+            <Select
+              v-model="selectedRuleId"
+              :options="ruleSelectOptions"
+              placeholder="请选择规则..."
+            />
           </div>
           <div v-if="selectedRule" class="rule-info">
             <div class="rule-info-item">
@@ -79,9 +77,12 @@
             <label class="ml-label">转发目标 <span class="required">*</span></label>
             <div class="target-list">
               <div v-for="(target, idx) in quickTargets" :key="idx" class="target-item">
-                <select v-model="target.platform" class="ml-select" style="width: 110px;">
-                  <option v-for="p in availablePlatforms" :key="p" :value="p">{{ p }}</option>
-                </select>
+                <Select
+                  v-model="target.platform"
+                  :options="platformOptions"
+                  size="small"
+                  style="width: 110px;"
+                />
                 <input
                   v-model="target.selfId"
                   class="ml-input"
@@ -153,6 +154,7 @@ import { ref, computed, watch } from 'vue'
 import { mailApi, ruleApi } from '../api'
 import type { StoredMail, ForwardRule, ForwardTarget, MailAddress, ForwardMode, ForwardResult } from '../types'
 import Icon from './Icon.vue'
+import Select from './Select.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -175,8 +177,21 @@ const quickTargets = ref<ForwardTarget[]>([
   { platform: 'onebot', selfId: '', channelId: '' }
 ])
 
-// 可用平台列表
-const availablePlatforms = ['onebot', 'discord', 'telegram', 'kook', 'qq', 'slack']
+// 可用平台列表 - 扩展更多常见平台
+const availablePlatforms = ['onebot', 'discord', 'telegram', 'kook', 'qq', 'slack', 'dingtalk', 'feishu', 'line', 'whatsapp', 'matrix', 'wechat-official', 'custom']
+
+// 平台选项（用于 Select 组件）
+const platformOptions = computed(() =>
+  availablePlatforms.map(p => ({ label: p, value: p }))
+)
+
+// 规则选项（用于 Select 组件）
+const ruleSelectOptions = computed(() =>
+  enabledRules.value.map(r => ({
+    label: r.description ? `${r.name} - ${r.description}` : r.name,
+    value: r.id
+  }))
+)
 
 // 计算属性
 const enabledRules = computed(() => rules.value.filter(r => r.enabled))

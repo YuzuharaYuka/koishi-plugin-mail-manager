@@ -122,7 +122,9 @@ const modeLabels: Record<string, string> = {
 const loading = ref(false)
 const rules = ref<ForwardRule[]>([])
 const accounts = ref<MailAccount[]>([])
-const availablePlatforms = ref<string[]>(['onebot', 'discord', 'telegram', 'kook'])
+// 扩展平台列表，包含更多常见平台
+const defaultPlatforms = ['onebot', 'discord', 'telegram', 'kook', 'qq', 'slack', 'dingtalk', 'feishu', 'line', 'whatsapp', 'matrix', 'wechat-official', 'custom']
+const availablePlatforms = ref<string[]>(defaultPlatforms)
 const showModal = ref(false)
 const editingRule = ref<ForwardRule | null>(null)
 
@@ -202,7 +204,8 @@ const loadTargets = async () => {
   try {
     const targets = await commonApi.getTargets()
     const platforms = new Set(targets.map(t => t.platform))
-    availablePlatforms.value = [...platforms, 'onebot', 'discord', 'telegram', 'kook']
+    // 合并 API 返回的平台和默认平台列表
+    availablePlatforms.value = [...platforms, ...defaultPlatforms]
       .filter((v, i, a) => a.indexOf(v) === i)
   } catch (e) {
     console.error('Failed to load targets:', e)

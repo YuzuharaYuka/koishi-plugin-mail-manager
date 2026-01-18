@@ -18,12 +18,11 @@
         </div>
         <div class="ml-form-group">
           <label class="ml-label">绑定账号</label>
-          <select v-model="formData.accountId" class="ml-select">
-            <option :value="undefined">所有账号</option>
-            <option v-for="account in accounts" :key="account.id" :value="account.id">
-              {{ account.name }}
-            </option>
-          </select>
+          <Select
+            v-model="formData.accountId"
+            :options="accountOptions"
+            placeholder="所有账号"
+          />
           <div class="ml-help">仅处理指定账号收到的邮件</div>
         </div>
 
@@ -34,16 +33,12 @@
         <div class="ml-condition-editor">
           <div class="condition-list">
             <div v-for="(cond, idx) in formData.conditions" :key="idx" class="condition-item">
-              <select v-model="cond.type" class="ml-select condition-type">
-                <option value="all">匹配所有邮件</option>
-                <option value="subject_contains">主题包含</option>
-                <option value="subject_regex">主题正则</option>
-                <option value="from_contains">发件人包含</option>
-                <option value="from_regex">发件人正则</option>
-                <option value="to_contains">收件人包含</option>
-                <option value="body_contains">正文包含</option>
-                <option value="body_regex">正文正则</option>
-              </select>
+              <Select
+                v-model="cond.type"
+                :options="conditionTypeOptions"
+                size="small"
+                class="condition-type"
+              />
               <input
                 v-if="cond.type !== 'all'"
                 v-model="cond.value"
@@ -77,9 +72,12 @@
           <div class="target-list">
             <div v-for="(target, idx) in formData.targets" :key="idx" class="target-item">
               <div class="target-info">
-                <select v-model="target.platform" class="ml-select" style="width: 120px;">
-                  <option v-for="p in availablePlatforms" :key="p" :value="p">{{ p }}</option>
-                </select>
+                <Select
+                  v-model="target.platform"
+                  :options="platformOptions"
+                  size="small"
+                  style="width: 120px;"
+                />
                 <input
                   v-model="target.selfId"
                   class="ml-input"
@@ -174,12 +172,12 @@
                 class="ml-input"
                 placeholder="正则表达式，例如: 验证码[：:]\s*(\d{6})"
               />
-              <select v-model="formData.regexFlags" class="ml-select" style="width: 100px;">
-                <option value="">默认</option>
-                <option value="i">忽略大小写</option>
-                <option value="g">全局匹配</option>
-                <option value="gi">全局+忽略</option>
-              </select>
+              <Select
+                v-model="formData.regexFlags"
+                :options="regexFlagOptions"
+                size="small"
+                style="width: 120px;"
+              />
             </div>
             <div class="ml-form-group" style="margin-top: 8px;">
               <label class="ml-label">提取模板</label>
@@ -227,6 +225,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { ruleApi } from '../api'
 import type { ForwardRule, MailAccount, ForwardCondition, ForwardTarget, ForwardElement, ForwardMode } from '../types'
 import Icon from './Icon.vue'
+import Select from './Select.vue'
 
 const props = defineProps<{
   visible: boolean
@@ -243,6 +242,37 @@ const emit = defineEmits<{
 const saving = ref(false)
 
 const isEditing = computed(() => !!props.rule)
+
+// 账号选项（用于 Select 组件）
+const accountOptions = computed(() => [
+  { label: '所有账号', value: undefined },
+  ...props.accounts.map(a => ({ label: a.name, value: a.id }))
+])
+
+// 平台选项（用于 Select 组件）
+const platformOptions = computed(() =>
+  props.availablePlatforms.map(p => ({ label: p, value: p }))
+)
+
+// 条件类型选项
+const conditionTypeOptions = [
+  { label: '匹配所有邮件', value: 'all' },
+  { label: '主题包含', value: 'subject_contains' },
+  { label: '主题正则', value: 'subject_regex' },
+  { label: '发件人包含', value: 'from_contains' },
+  { label: '发件人正则', value: 'from_regex' },
+  { label: '收件人包含', value: 'to_contains' },
+  { label: '正文包含', value: 'body_contains' },
+  { label: '正文正则', value: 'body_regex' },
+]
+
+// 正则标志选项
+const regexFlagOptions = [
+  { label: '默认', value: '' },
+  { label: '忽略大小写', value: 'i' },
+  { label: '全局匹配', value: 'g' },
+  { label: '全局+忽略', value: 'gi' },
+]
 
 // 元素类型标签映射
 const elementLabels: Record<string, string> = {
@@ -776,7 +806,8 @@ const saveRule = async () => {
 
     textarea {
       width: 100%;
-      min-height: 100px;
+      min-height: 200px;
+      max-height: 350px;
       padding: 12px;
       border: none;
       background: var(--ml-code-bg, #1e1e1e);

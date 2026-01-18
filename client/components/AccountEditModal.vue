@@ -54,7 +54,7 @@
               class="ml-input"
               :class="{ 'has-error': !isEditing && !formData.password && formTouched.password }"
               :type="showPassword ? 'text' : 'password'"
-              placeholder="授权码（非登录密码）"
+              :placeholder="isEditing ? '留空则保持原密码不变' : '授权码（非登录密码）'"
               @blur="formTouched.password = true"
             />
             <button class="toggle-password-btn" @click="showPassword = !showPassword" tabindex="-1">
@@ -182,7 +182,7 @@ const emailProviders: Record<string, ProviderConfig> = {
     imapPort: 993,
     imapTls: true,
     authGuide: '请在 QQ 邮箱「设置 > 账户 > POP3/IMAP 服务」中开启 IMAP 并获取授权码',
-    helpUrl: 'https://service.mail.qq.com/cgi-bin/help?subtype=1&&id=28&&no=1001256'
+    helpUrl: 'https://service.mail.qq.com/detail/0/75'
   },
   netease163: {
     name: '163 邮箱',
@@ -191,7 +191,7 @@ const emailProviders: Record<string, ProviderConfig> = {
     imapPort: 993,
     imapTls: true,
     authGuide: '请在 163 邮箱「设置 > POP3/SMTP/IMAP」中开启 IMAP 服务并获取授权码',
-    helpUrl: 'https://help.mail.163.com/faqDetail.do?code=d7a5dc8471cd0c0e8b4b8f4f8e49998b374173cfe9171305fa1ce630d7f67ac21b87735d7227c217'
+    helpUrl: 'https://help.mail.163.com/faqDetail.do?code=d7a5dc8471cd0c0e8b4b8f4f8e49998b374173cfe9171305fa1ce630d7f67ac2a5feb28b66796d3b'
   },
   netease126: {
     name: '126 邮箱',
@@ -200,7 +200,7 @@ const emailProviders: Record<string, ProviderConfig> = {
     imapPort: 993,
     imapTls: true,
     authGuide: '请在 126 邮箱「设置 > POP3/SMTP/IMAP」中开启 IMAP 服务并获取授权码',
-    helpUrl: 'https://help.mail.163.com/faqDetail.do?code=d7a5dc8471cd0c0e8b4b8f4f8e49998b374173cfe9171305fa1ce630d7f67ac21b87735d7227c217'
+    helpUrl: 'https://help.mail.163.com/faqDetail.do?code=d7a5dc8471cd0c0e8b4b8f4f8e49998b374173cfe9171305fa1ce630d7f67ac2a5feb28b66796d3b'
   },
   gmail: {
     name: 'Gmail',
@@ -357,7 +357,7 @@ watch(() => props.visible, (newVal) => {
       Object.assign(formData, {
         name: props.account.name,
         email: props.account.email,
-        password: props.account.password,
+        password: '', // 编辑时不填充密码，用户需要重新输入才会更新
         imapHost: props.account.imapHost,
         imapPort: props.account.imapPort,
         imapTls: props.account.imapTls,

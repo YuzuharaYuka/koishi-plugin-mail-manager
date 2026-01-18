@@ -5,20 +5,19 @@
       <div class="config-row">
         <div class="ml-form-group inline">
           <label class="ml-label">选择邮件</label>
-          <select v-model="selectedMailId" class="ml-select" @change="onMailChange">
-            <option :value="null">请选择邮件...</option>
-            <option v-for="mail in mails" :key="mail.id" :value="mail.id">
-              [{{ mail.subject || '(无主题)' }}] - {{ mail.from }}
-            </option>
-          </select>
+          <Select
+            v-model="selectedMailId"
+            :options="mailOptions"
+            placeholder="请选择邮件..."
+            @change="onMailChange"
+          />
         </div>
         <div class="ml-form-group inline">
           <label class="ml-label">渲染模式</label>
-          <select v-model="renderMode" class="ml-select">
-            <option value="text">纯文本</option>
-            <option value="image">图片模式</option>
-            <option value="hybrid">混合模式</option>
-          </select>
+          <Select
+            v-model="renderMode"
+            :options="renderModeOptions"
+          />
         </div>
         <button
           class="ml-btn primary"
@@ -123,10 +122,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { mailApi, previewApi } from '../api'
 import type { StoredMail, ForwardElement, ForwardPreviewResponse } from '../types'
 import Icon from '../components/Icon.vue'
+import Select from '../components/Select.vue'
 
 interface PreviewElement {
   type: string
@@ -137,6 +137,21 @@ interface PreviewElement {
 
 // 使用 API 返回的类型
 type PreviewData = ForwardPreviewResponse
+
+// 邮件选项（用于 Select 组件）
+const mailOptions = computed(() =>
+  mails.value.map(m => ({
+    label: `[${m.subject || '(无主题)'}] - ${m.from}`,
+    value: m.id
+  }))
+)
+
+// 渲染模式选项
+const renderModeOptions = [
+  { label: '纯文本', value: 'text' },
+  { label: '图片模式', value: 'image' },
+  { label: '混合模式', value: 'hybrid' },
+]
 
 const getIconName = (type: string): string => {
   const iconMap: Record<string, string> = {
@@ -294,6 +309,8 @@ onMounted(() => {
 
 <style scoped>
 .config-card {
+  flex-shrink: 0;
+
   .config-row {
     display: flex;
     align-items: flex-end;
@@ -302,18 +319,29 @@ onMounted(() => {
 
     .ml-form-group.inline {
       margin-bottom: 0;
-      flex: 1;
-      min-width: 150px;
-      max-width: 280px;
 
       .ml-label {
         white-space: nowrap;
         margin-bottom: 6px;
       }
+    }
 
-      .ml-select {
-        width: 100%;
-        min-width: 150px;
+    /* 邮件选择器 - 宽度更大以显示完整邮件标题 */
+    .ml-form-group.inline:first-child {
+      flex: 2;
+      min-width: 280px;
+      max-width: 500px;
+    }
+
+    /* 渲染模式选择器 - 固定宽度 */
+    .ml-form-group.inline:nth-child(2) {
+      flex: 0 0 auto;
+      min-width: 140px;
+      max-width: 160px;
+
+      :deep(.ml-select-wrapper) {
+        width: auto;
+        display: inline-block;
       }
     }
 
@@ -390,7 +418,8 @@ onMounted(() => {
 
   textarea {
     width: 100%;
-    min-height: 120px;
+    min-height: 200px;
+    max-height: 400px;
     padding: 12px;
     border: none;
     background: var(--ml-code-bg, #1e1e1e);
