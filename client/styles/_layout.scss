@@ -1,10 +1,19 @@
 /**
  * 邮件管理插件 - 布局样式
+ * 适配 Koishi k-layout 布局系统
  */
 
-// k-layout 内部结构：k-layout > .k-layout-main > [我们的内容]
-// .ml-header 和 .ml-content 是 k-layout-main 的子元素
+// ========== K-Layout 适配 ==========
+// Koishi 的 k-layout 使用 flex 布局，我们的内容需要正确适配
 
+// 根容器 - 简单的 flex 容器
+.mail-listener-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+// ========== 顶部导航 ==========
 // 顶部导航 - 固定不滚动
 .ml-header {
   display: flex;
@@ -85,42 +94,14 @@
 
 // 主内容区
 .ml-content {
-  flex: 1 !important;
-  min-height: 0 !important; // 关键：允许 flex 子项缩小
-  overflow: hidden !important; // 不在此处滚动，让子视图自己处理
+  flex: 1;
+  min-height: 0;
+  overflow: auto; // 允许内容区滚动
   padding: var(--ml-spacing-lg);
   background: var(--ml-bg-base);
-  display: flex !important;
-  flex-direction: column !important;
-
-  // keep-alive 容器和子视图容器需要填满
-  > * {
-    flex: 1 !important;
-    min-height: 0 !important; // 关键：允许缩小
-    display: flex !important;
-    flex-direction: column !important;
-  }
 }
 
-// 覆盖 k-layout 内部样式确保布局正确
-.mail-listener-app {
-  height: 100vh !important; // 关键：给根容器设置视口高度
-  max-height: 100vh !important;
-  display: flex !important;
-  flex-direction: column !important;
-  overflow: hidden !important;
-
-  // k-layout-main 是实际内容区域
-  :deep(.k-layout-main),
-  > .k-layout-main {
-    flex: 1 !important;
-    display: flex !important;
-    flex-direction: column !important;
-    min-height: 0 !important; // 关键：允许缩小
-    overflow: hidden !important;
-  }
-}
-
+// ========== 卡片样式 ==========
 // 卡片样式 - 现代化风格
 .ml-card {
   background: var(--ml-bg-container);

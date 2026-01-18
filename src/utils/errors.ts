@@ -17,6 +17,43 @@ export interface ErrorMatcher {
 }
 
 /**
+ * 用户友好的错误消息映射表
+ * 将技术错误转换为易于理解的中文提示
+ */
+export const USER_FRIENDLY_ERRORS: Record<string, string> = {
+  'ENOTFOUND': '无法找到邮件服务器，请检查服务器地址是否正确',
+  'ECONNREFUSED': '服务器拒绝连接，请检查端口配置',
+  'ETIMEDOUT': '连接超时，请检查网络或尝试使用代理',
+  'ECONNRESET': '连接被重置，请稍后重试',
+  'ENETUNREACH': '网络不可达，请检查网络连接',
+  'authentication failed': '登录失败，请检查邮箱密码或授权码',
+  'Invalid credentials': '认证失败，请检查账号密码',
+  'AUTHENTICATIONFAILED': '认证失败，部分邮箱需要使用专用授权码',
+  'certificate': 'SSL证书验证失败，请尝试关闭TLS或检查服务器配置',
+  'SSL': 'SSL连接错误，请检查TLS设置',
+  'TLS': 'TLS连接错误，请检查加密设置',
+  'too many': '请求过于频繁，请稍后再试',
+  'rate limit': '已达到请求限制，请稍后再试',
+  'mailbox not found': '收件箱未找到，请检查邮箱配置',
+  'LOGIN disabled': '登录被禁用，请检查是否需要开启IMAP访问',
+}
+
+/**
+ * 根据错误消息获取用户友好的提示
+ */
+export function getUserFriendlyError(errorMessage: string): string {
+  const lowerMsg = errorMessage.toLowerCase()
+
+  for (const [key, friendlyMsg] of Object.entries(USER_FRIENDLY_ERRORS)) {
+    if (lowerMsg.includes(key.toLowerCase())) {
+      return friendlyMsg
+    }
+  }
+
+  return errorMessage
+}
+
+/**
  * 通用 IMAP 错误匹配规则
  * 按照优先级排序，越靠前的规则越优先匹配
  */

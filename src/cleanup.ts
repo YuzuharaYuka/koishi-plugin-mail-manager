@@ -1,5 +1,6 @@
 import { Context, $ } from 'koishi'
 import { Logger } from 'koishi'
+import { sleep } from './utils'
 
 const logger = new Logger('mail-manager')
 
@@ -92,7 +93,7 @@ export async function cleanExpiredMails(
     }
 
     // Small delay to prevent database starvation
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await sleep(50)
 
     // Trigger Garbage Collection if available to keep memory footprint low
     if (totalDeleted % 500 === 0 && global.gc) {

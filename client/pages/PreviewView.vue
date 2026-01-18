@@ -16,8 +16,8 @@
           <label class="ml-label">渲染模式</label>
           <select v-model="renderMode" class="ml-select">
             <option value="text">纯文本</option>
-            <option value="html">HTML 图片</option>
-            <option value="markdown">Markdown 图片</option>
+            <option value="image">图片模式</option>
+            <option value="hybrid">混合模式</option>
           </select>
         </div>
         <button
@@ -225,7 +225,7 @@ const defaultElements: ForwardElement[] = [
 const loading = ref(false)
 const mails = ref<StoredMail[]>([])
 const selectedMailId = ref<number | null>(null)
-const renderMode = ref<'text' | 'html' | 'markdown'>('text')
+const renderMode = ref<'text' | 'image' | 'hybrid'>('text')
 const previewTab = ref<'elements' | 'text' | 'image'>('elements')
 const elements = reactive(JSON.parse(JSON.stringify(defaultElements)))
 const customCss = ref(defaultCss)
@@ -260,9 +260,25 @@ const generatePreview = async () => {
       mailId: selectedMailId.value,
       elements: elements.filter((e: ForwardElement) => e.enabled),
       customCss: customCss.value,
+      forwardMode: renderMode.value,
+      renderConfig: {
+        imageWidth: 800,
+        backgroundColor: '#ffffff',
+        textColor: '#333333',
+        fontSize: 14,
+        padding: 20,
+        showBorder: true,
+        borderColor: '#e0e0e0',
+      },
     })
 
     previewData.value = result
+    // 根据渲染模式自动切换到合适的预览标签
+    if (renderMode.value === 'image' || renderMode.value === 'hybrid') {
+      previewTab.value = 'image'
+    } else {
+      previewTab.value = 'text'
+    }
   } catch (e) {
     console.error('Failed to generate preview:', e)
     alert(`生成预览失败: ${(e as Error).message}`)
@@ -286,15 +302,24 @@ onMounted(() => {
 
     .ml-form-group.inline {
       margin-bottom: 0;
-      min-width: 200px;
+      flex: 1;
+      min-width: 150px;
+      max-width: 280px;
+
+      .ml-label {
+        white-space: nowrap;
+        margin-bottom: 6px;
+      }
 
       .ml-select {
-        min-width: 200px;
+        width: 100%;
+        min-width: 150px;
       }
     }
 
     .ml-btn {
       flex-shrink: 0;
+      white-space: nowrap;
     }
   }
 }
@@ -368,8 +393,8 @@ onMounted(() => {
     min-height: 120px;
     padding: 12px;
     border: none;
-    background: #1e1e1e;
-    color: #d4d4d4;
+    background: var(--ml-code-bg, #1e1e1e);
+    color: var(--ml-code-text, #d4d4d4);
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 13px;
     line-height: 1.5;
@@ -379,10 +404,6 @@ onMounted(() => {
       outline: none;
     }
   }
-}
-
-.preview-result {
-  min-height: 300px;
 }
 
 .preview-tabs {
@@ -529,6 +550,7 @@ onMounted(() => {
     height: auto;
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    display: block;
   }
 
   .preview-notice {

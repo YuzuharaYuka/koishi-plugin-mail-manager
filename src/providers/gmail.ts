@@ -12,17 +12,30 @@ import { PrefixBasedIpStrategy, type IpSelectionStrategy, type ErrorMatcher } fr
  * Gmail IP 选择策略
  *
  * Google 的 IMAP 服务器使用多个 IP 段，某些 IP 段在特定地区可能更稳定。
- * 此策略优先选择已知稳定的 IP 段，避免不稳定的 IP 段。
+ * 此策略优先选择已知稳定的 IP 段。
+ *
+ * 注意：在中国大陆，Gmail 服务被封锁，无论哪个 IP 段都无法直连。
+ * 建议使用代理（配置 proxyUrl）以绕过网络限制。
  */
 export class GmailIpStrategy extends PrefixBasedIpStrategy {
   constructor() {
     super(
       'gmail',
       // 优选 IP 段（Google 全球稳定 IP）
-      ['142.250.', '142.251.', '172.253.'],
-      // 避免的 IP 段（某些地区不稳定）
-      ['74.125.']
+      ['142.250.', '142.251.', '172.253.', '74.125.'],
+      // 黑名单 IP 段（已知完全不可用的 IP）
+      []
     )
+  }
+
+  /**
+   * 覆盖重试策略
+   * Gmail 在中国大陆无法直连，避免无意义的重试
+   */
+  shouldRetryQuery(addresses: string[]): boolean {
+    // 如果有任何可用地址，就不重试
+    // 即使不是优选段，也接受（因为在中国大陆都无法直连）
+    return false
   }
 }
 
@@ -56,8 +69,11 @@ export class GmailProvider extends MailProviderAdapter {
   private readonly ipStrategy = new GmailIpStrategy()
 
   getImapConfig(account: MailAccount, resolvedHost?: string, proxyUrl?: string): Partial<ImapFlowOptions> {
+    const isUsingProxy = !!proxyUrl
+    const targetHost = account.imapHost || 'imap.gmail.com'
+
     const config: any = {
-      host: resolvedHost || account.imapHost || 'imap.gmail.com',
+      host: resolvedHost || targetHost,
       port: account.imapPort || 993,
       secure: true,
       auth: {
@@ -68,11 +84,9 @@ export class GmailProvider extends MailProviderAdapter {
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2',
-        // Gmail 支持的加密套件
-        ciphers: 'HIGH:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4',
-        // 使用代理时，必须设置 servername 以支持 TLS SNI
-        servername: account.imapHost || 'imap.gmail.com',
-      },
+        // 使用代理时必须设置 servername 为域名（而非 IP）
+        servername: targetHost,
+      } as any,
       greetingTimeout: 30000,
       socketTimeout: 120000, // Gmail 建议更长的超时时间
     }
@@ -80,6 +94,12 @@ export class GmailProvider extends MailProviderAdapter {
     // 代理配置
     if (proxyUrl) {
       config.proxy = proxyUrl
+
+      // 使用 HTTP/HTTPS 代理时，需要确保 host 是域名而非 IP
+      // 这样代理可以正确处理 CONNECT 隧道
+      if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
+        config.host = targetHost // 强制使用域名
+      }
     }
 
     return config

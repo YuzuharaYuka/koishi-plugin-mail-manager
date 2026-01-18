@@ -124,15 +124,15 @@
   width: 900px; // 默认宽度
   max-width: 95vw;
   max-height: 90vh;
-  height: auto;
+  height: 90vh; // 固定高度，避免内容撑开
 
   .mail-detail-body {
     display: flex;
-    gap: var(--ml-spacing);
+    gap: 0; // 移除间隙，让侧边栏边框作为分隔
     padding: 0;
     overflow: hidden;
-    height: calc(90vh - 40px); // 留出一些边距
-    min-height: 500px;
+    flex: 1; // 使用 flex: 1 而非固定高度
+    min-height: 0; // 关键：允许 flex 子项收缩
   }
 
   // 左侧：邮件信息侧边栏
@@ -355,11 +355,13 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0; // 关键：允许 flex 子项收缩
     overflow: hidden;
-    padding: var(--ml-spacing);
+    padding: 0; // 移除 padding，让内容完全填充
 
     .mail-content {
       flex: 1;
+      min-height: 0; // 关键：允许 flex 子项收缩
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -369,8 +371,8 @@
         margin: 0;
         padding: var(--ml-spacing);
         background: var(--ml-bg-base);
-        border: 1px solid var(--ml-border-light);
-        border-radius: var(--ml-radius);
+        border: none; // 移除边框
+        border-radius: 0;
         font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
         font-size: 13px;
         line-height: 1.8;
@@ -401,12 +403,11 @@
       .html-content {
         flex: 1;
         width: 100%;
-        min-height: 400px;
-        max-height: calc(90vh - 200px); // 留出空间给侧边栏
-        border: 1px solid var(--ml-border-light);
-        border-radius: var(--ml-radius);
+        height: 100%; // 确保填满容器
+        border: none; // 移除边框
+        border-radius: 0;
         background: #fff;
-        overflow: hidden;
+        overflow: auto; // 改为 auto，让 iframe 自己处理滚动
       }
     }
   }

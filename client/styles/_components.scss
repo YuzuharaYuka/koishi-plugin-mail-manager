@@ -133,8 +133,8 @@
       height: 14px;
     }
 
-    // 仅图标的小按钮
-    &:not(:has(text)) {
+    // 仅图标的小按钮 - 使用明确的icon-only类
+    &.icon-only {
       padding: 6px;
       min-width: 32px;
       height: 32px;
@@ -196,6 +196,49 @@
   border-radius: 4px;
   color: var(--ml-text-secondary);
   margin-right: 4px;
+}
+
+// 状态指示点
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+
+  &.connected {
+    background: var(--ml-success);
+    box-shadow: 0 0 0 3px var(--ml-success-light);
+  }
+
+  &.connecting {
+    background: var(--ml-warning);
+    box-shadow: 0 0 0 3px var(--ml-warning-light);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  &.disconnected {
+    background: var(--ml-text-tertiary);
+  }
+
+  &.error {
+    background: var(--ml-error);
+    box-shadow: 0 0 0 3px var(--ml-error-light);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+// 分页单位文字
+.selector-unit {
+  font-size: 13px;
+  color: var(--ml-text-secondary);
+  white-space: nowrap;
+  margin-left: 4px;
 }
 
 // 空状态 - 更友好的视觉效果

@@ -1,7 +1,9 @@
 import { Schema } from 'koishi'
+import { randomBytes } from 'crypto'
 
 export interface Config {
   debug: boolean
+  encryptionKey: string
   mailRetentionDays: number
   autoCleanup: boolean
   autoReconnect: boolean
@@ -10,12 +12,19 @@ export interface Config {
   connectionTimeout: number
   healthCheckEnabled: boolean
   healthCheckInterval: number
+  enableConnectivityTest: boolean
+  connectivityTestTimeout: number
 }
+
+// 生成默认加密密钥（仅用于首次配置）
+const generateDefaultKey = () => randomBytes(32).toString('base64')
 
 export const Config: Schema<Config> = Schema.intersect([
   Schema.object({
     debug: Schema.boolean().default(false)
       .description('调试模式'),
+    encryptionKey: Schema.string().default(generateDefaultKey())
+      .description('密码加密密钥(修改后需重新配置所有邮箱密码)').role('secret'),
     mailRetentionDays: Schema.number().default(30).min(0)
       .description('邮件保留天数(0为永久保留)'),
     autoCleanup: Schema.boolean().default(true)
@@ -35,6 +44,10 @@ export const Config: Schema<Config> = Schema.intersect([
       .description('启用健康检查(定期检测连接状态并自动重连)'),
     healthCheckInterval: Schema.number().default(300).min(60).max(3600)
       .description('健康检查间隔(秒)'),
+    enableConnectivityTest: Schema.boolean().default(true)
+      .description('启用 IP 连通性测试(DNS 解析后自动测试所有 IP 并选择延迟最低的)'),
+    connectivityTestTimeout: Schema.number().default(3000).min(1000).max(10000)
+      .description('单个 IP 连通性测试超时时间(毫秒)'),
   }).description('连接设置'),
 ])
 

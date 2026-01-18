@@ -27,6 +27,11 @@
 
 // ========== 邮件视图 ==========
 .mails-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ml-spacing);
+  padding: 4px;
+
   // 筛选卡片
   .filter-card {
     padding: var(--ml-spacing-sm);
@@ -66,45 +71,39 @@
   // 邮件列表卡片
   .mail-list-card {
     margin-bottom: 0;
-    flex: 1;
-    min-height: 0; // 关键：允许 flex 子项缩小
-    display: flex;
-    flex-direction: column;
-    overflow: hidden; // 防止卡片本身滚动
-    padding: 0; // 移除padding，由子元素控制
   }
 
   // 加载状态和空状态需要padding
   .ml-loading,
   .ml-empty {
-    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: var(--ml-spacing-lg);
+    min-height: 200px;
   }
 
   .mail-table-wrapper {
-    flex: 1 !important;
-    min-height: 0 !important; // 关键：允许 flex 子项缩小
-    max-height: calc(100vh - 350px) !important; // 强制设置最大高度：视口高度 - 顶部导航和工具栏
-    overflow-y: scroll !important; // 强制显示滚动条
-    overflow-x: auto !important; // 允许水平滚动以适应缩放
-    padding: 0 var(--ml-spacing-sm) var(--ml-spacing-xs) var(--ml-spacing-sm); // 减小底部padding
+    min-height: 200px; // 最小高度确保内容可见
+    max-height: calc(100vh - 300px); // 优化高度计算，减小底部空白
+    overflow-y: auto;
+    overflow-x: hidden; // 禁止横向滚动，强制内容适应宽度
+    padding: 0 var(--ml-spacing-sm) var(--ml-spacing-xs) var(--ml-spacing-sm);
     @include custom-scrollbar;
   }
 
   // 分页控件固定在底部，不随表格滚动
   .ml-pagination {
     flex-shrink: 0;
-    padding: 6px var(--ml-spacing-sm);
-    border-top: 1px solid var(--ml-border-light); // 添加分隔线
+    padding: 8px var(--ml-spacing);
+    border-top: 1px solid var(--ml-border-light);
+    background: var(--ml-bg-container);
   }
 
   // 邮件表格优化
   .mail-list-table {
-    min-width: 600px; // 设置合理的最小宽度，适应常规屏幕
     width: 100%;
+    table-layout: fixed; // 固定表格布局，严格控制列宽
 
     // 表头样式
     thead {
@@ -113,11 +112,18 @@
       z-index: 10;
 
       th {
-        background: #fff;
+        background: var(--ml-bg-container);
         backdrop-filter: blur(8px);
         font-weight: 600;
         padding: 8px 8px;
         box-shadow: 0 1px 0 var(--ml-border-light);
+        text-align: left;
+
+        // 时间列和操作列居中
+        &.col-date,
+        &.col-action {
+          text-align: center;
+        }
 
         &.sortable {
           cursor: pointer;
@@ -191,29 +197,44 @@
     font-size: 13px;
     text-transform: uppercase;
     box-shadow: var(--ml-shadow-sm);
+    flex-shrink: 0;
   }
 
   // 发件人列
-  .mail-from {
-    .sender-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
+  .col-sender {
+    max-width: 200px;
+  }
 
-    .sender-name {
-      font-size: 13px;
-      color: var(--ml-text);
+  .sender-cell-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0; // 关键：允许flex子项缩小
+  }
 
-      &.bold {
-        font-weight: 600;
-      }
-    }
+  .sender-info {
+    min-width: 0; // 关键：允许文本截断
+    flex: 1;
+  }
 
-    .sender-email {
-      font-size: 11px;
-      color: var(--ml-text-secondary);
+  .sender-name {
+    font-size: 13px;
+    color: var(--ml-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &.bold {
+      font-weight: 600;
     }
+  }
+
+  .sender-email {
+    font-size: 11px;
+    color: var(--ml-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   // 主题列
@@ -314,19 +335,20 @@
     padding: var(--ml-spacing-sm) var(--ml-spacing);
     border-top: 1px solid var(--ml-border-light);
     flex-shrink: 0;
-    background: var(--ml-bg-base);
+    background: var(--ml-bg-container);
     gap: var(--ml-spacing);
+    flex-wrap: wrap;
 
     .pagination-left,
     .pagination-right {
       display: flex;
       align-items: center;
       gap: var(--ml-spacing-sm);
-      flex: 1;
     }
 
     .pagination-left {
       justify-content: flex-start;
+      flex: 0 0 auto;
     }
 
     .pagination-center {
@@ -338,6 +360,26 @@
 
     .pagination-right {
       justify-content: flex-end;
+      flex: 0 0 auto;
+    }
+
+    // 每页数量选择器
+    .page-size-selector {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+
+      .selector-label {
+        font-size: 13px;
+        color: var(--ml-text-secondary);
+        white-space: nowrap;
+      }
+
+      .selector-unit {
+        font-size: 13px;
+        color: var(--ml-text-secondary);
+        white-space: nowrap;
+      }
     }
 
     // 翻页按钮

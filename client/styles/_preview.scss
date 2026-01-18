@@ -76,8 +76,8 @@
       min-height: 200px;
       padding: 12px;
       border: none;
-      background: #1e1e1e;
-      color: #d4d4d4;
+      background: var(--ml-code-bg, #1e1e1e);
+      color: var(--ml-code-text, #d4d4d4);
       font-family: "Consolas", "Monaco", monospace;
       font-size: 13px;
       line-height: 1.5;

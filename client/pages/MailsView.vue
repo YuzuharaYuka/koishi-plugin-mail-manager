@@ -49,26 +49,25 @@
           <table class="ml-table mail-list-table">
             <thead>
               <tr>
-                <th style="width: 40px;"></th>
-                <th style="width: 150px;" class="sortable" @click="toggleSort('sender')">
+                <th class="col-sender sortable" @click="toggleSort('sender')">
                   发件人
                   <span class="sort-icon" :class="getSortClass('sender')">
                     <Icon :name="getSortIcon('sender')" />
                   </span>
                 </th>
-                <th style="min-width: 200px;" class="sortable" @click="toggleSort('subject')">
+                <th class="col-subject sortable" @click="toggleSort('subject')">
                   主题
                   <span class="sort-icon" :class="getSortClass('subject')">
                     <Icon :name="getSortIcon('subject')" />
                   </span>
                 </th>
-                <th style="width: 120px;" class="sortable" @click="toggleSort('date')">
+                <th class="col-date sortable" @click="toggleSort('date')">
                   时间
                   <span class="sort-icon" :class="getSortClass('date')">
                     <Icon :name="getSortIcon('date')" />
                   </span>
                 </th>
-                <th style="width: 90px;">操作</th>
+                <th class="col-action">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -78,27 +77,27 @@
                 :class="{ unread: !mail.isRead }"
                 @click="openMailDetail(mail)"
               >
-                <td class="mail-avatar-col" @click.stop>
-                  <div
-                    class="mail-avatar"
-                    :style="{ backgroundColor: getAvatarColor(getSenderName(mail.from)) }"
-                    :title="getSenderName(mail.from)"
-                  >
-                    {{ getAvatarText(getSenderName(mail.from)) }}
-                  </div>
-                </td>
-                <td class="mail-from" data-label="发件人">
-                  <div class="sender-info">
-                    <div class="sender-name" :class="{ bold: !mail.isRead }">
-                      {{ getSenderName(mail.from) }}
+                <td class="col-sender" data-label="发件人">
+                  <div class="sender-cell-content">
+                    <div
+                      class="mail-avatar"
+                      :style="{ backgroundColor: getAvatarColor(getSenderName(mail.from)) }"
+                      :title="getSenderName(mail.from)"
+                    >
+                      {{ getAvatarText(getSenderName(mail.from)) }}
                     </div>
-                    <div class="sender-email">{{ getSenderEmail(mail.from) }}</div>
+                    <div class="sender-info">
+                      <div class="sender-name" :class="{ bold: !mail.isRead }">
+                        {{ getSenderName(mail.from) }}
+                      </div>
+                      <div class="sender-email">{{ getSenderEmail(mail.from) }}</div>
+                    </div>
                   </div>
                 </td>
-                <td class="mail-subject" data-label="主题">
+                <td class="col-subject" data-label="主题">
                   <div class="subject-wrapper">
                     <div class="subject-text" :class="{ bold: !mail.isRead }">
-                      <span v-if="!mail.isRead" class="status-dot"></span>
+                      <span v-if="!mail.isRead" class="status-dot" title="未读"></span>
                       {{ mail.subject || '(无主题)' }}
                     </div>
                     <div class="subject-snippet">
@@ -110,16 +109,16 @@
                     </div>
                   </div>
                 </td>
-                <td class="mail-date" data-label="时间">
+                <td class="col-date" data-label="时间">
                   <div class="date-cell">{{ formatDate(mail.receivedAt) }}</div>
                 </td>
-                <td class="mail-actions" data-label="操作" @click.stop>
+                <td class="col-action" data-label="操作" @click.stop>
                   <div class="action-btns">
-                    <button class="ml-btn small" @click="forwardMail(mail)" title="转发">
-                      <Icon name="share" />
+                    <button class="ml-btn small" @click="openForwardModal(mail)" title="转发">
+                      <Icon name="share-2" />
                     </button>
                     <button class="ml-btn small danger" @click="deleteMail(mail)" title="删除">
-                      <Icon name="delete" />
+                      <Icon name="trash-2" />
                     </button>
                   </div>
                 </td>
@@ -128,7 +127,7 @@
           </table>
         </div>
 
-        <!-- 分页控件 - 固定在底部 -->
+        <!-- 分页控件 -->
         <div class="ml-pagination">
           <div class="pagination-left">
             <button
@@ -138,7 +137,6 @@
               title="上一页"
             >
               <Icon name="chevron-left" />
-              <span>上一页</span>
             </button>
             <button
               class="page-btn next"
@@ -146,41 +144,22 @@
               @click="goToPage(pagination.page + 1)"
               title="下一页"
             >
-              <span>下一页</span>
               <Icon name="chevron-right" />
             </button>
-          </div>
-
-          <div class="pagination-center">
             <span class="page-info">
-              第 <span class="page-current">{{ pagination.page }}</span> / {{ pagination.totalPages }} 页
-              <span class="page-total">（共 {{ pagination.total }} 封）</span>
+              第 {{ pagination.page }} / {{ pagination.totalPages }} 页（共 {{ pagination.total }} 项）
             </span>
           </div>
 
           <div class="pagination-right">
             <div class="page-size-selector">
-              <span class="selector-label">每页</span>
               <Select
                 v-model="pagination.pageSize"
                 :options="pageSizeOptions"
                 @change="onPageSizeChange"
                 size="small"
               />
-              <span class="selector-label">封</span>
-            </div>
-            <div class="page-jumper" v-if="pagination.totalPages > 1">
-              <span class="jumper-label">跳至</span>
-              <input
-                type="number"
-                v-model.number="jumpPage"
-                :min="1"
-                :max="pagination.totalPages"
-                @keyup.enter="handleJumpPage"
-                class="jump-input"
-              />
-              <span>页</span>
-              <button class="jump-btn" @click="handleJumpPage">GO</button>
+              <span class="selector-unit">封/页</span>
             </div>
           </div>
         </div>
@@ -252,8 +231,8 @@
 
             <!-- 操作按钮 -->
             <div class="mail-actions">
-              <button class="ml-btn" @click="forwardMail(selectedMail)">
-                <Icon name="share" /> 转发此邮件
+              <button class="ml-btn" @click="openForwardModal(selectedMail)">
+                <Icon name="share-2" /> 转发此邮件
               </button>
             </div>
           </div>
@@ -276,6 +255,13 @@
         </div>
       </div>
     </div>
+
+    <!-- 手动转发弹窗 -->
+    <ForwardModal
+      v-model:visible="showForwardModal"
+      :mail="forwardMail"
+      @forwarded="onForwarded"
+    />
   </div>
 </template>
 
@@ -285,6 +271,7 @@ import { mailApi, accountApi } from '../api'
 import type { StoredMail, MailAccount, MailAddress } from '../types'
 import Icon from '../components/Icon.vue'
 import Select from '../components/Select.vue'
+import ForwardModal from '../components/ForwardModal.vue'
 
 const emit = defineEmits(['refresh'])
 
@@ -292,6 +279,57 @@ const loading = ref(false)
 const mails = ref<StoredMail[]>([])
 const accounts = ref<MailAccount[]>([])
 const showDetail = ref(false)
+const selectedMail = ref<StoredMail | null>(null)
+const contentTab = ref<'text' | 'html'>('text')
+const htmlIframe = ref<HTMLIFrameElement | null>(null)
+
+// 手动转发弹窗状态
+const showForwardModal = ref(false)
+const forwardMail = ref<StoredMail | null>(null)
+
+// 筛选状态
+const filters = reactive({
+  accountId: undefined as number | undefined,
+  isRead: undefined as boolean | undefined,
+  isForwarded: undefined as boolean | undefined,
+})
+
+// 分页状态
+const pagination = reactive({
+  page: 1,
+  pageSize: 20,
+  total: 0,
+  totalPages: 1
+})
+const jumpPage = ref(1)
+
+// 排序状态
+const sortKey = ref<string>('date')
+const sortOrder = ref<'asc' | 'desc'>('desc')
+
+const accountOptions = computed(() => [
+  { label: '所有账号', value: undefined },
+  ...accounts.value.map(a => ({ label: a.name, value: a.id }))
+])
+
+const readStatusOptions = [
+  { label: '全部状态', value: undefined },
+  { label: '已读', value: true },
+  { label: '未读', value: false },
+]
+
+const forwardedOptions = [
+  { label: '全部', value: undefined },
+  { label: '已转发', value: true },
+  { label: '未转发', value: false },
+]
+
+const pageSizeOptions = [
+  { label: '10', value: 10 },
+  { label: '20', value: 20 },
+  { label: '50', value: 50 },
+  { label: '100', value: 100 },
+]
 
 // 获取头像颜色
 const getAvatarColor = (name: string) => {
@@ -303,152 +341,98 @@ const getAvatarColor = (name: string) => {
   return colors[Math.abs(hash) % colors.length]
 }
 
-// 获取头像文字
 const getAvatarText = (name: string) => {
-  return name ? name.charAt(0).toUpperCase() : '?'
+  if (!name) return '?'
+  return name.charAt(0).toUpperCase()
 }
 
-// 获取发件人名称
-const getSenderName = (address: MailAddress) => {
-  return address.name || address.address.split('@')[0]
+const getSenderName = (from: MailAddress) => {
+  return from.name || from.address.split('@')[0]
 }
 
-// 获取发件人邮箱
-const getSenderEmail = (address: MailAddress) => {
-  return address.address
+const getSenderEmail = (from: MailAddress) => {
+  return from.address
 }
-const selectedMail = ref<StoredMail | null>(null)
-const contentTab = ref<'text' | 'html'>('text')
-const htmlIframe = ref<HTMLIFrameElement | null>(null)
 
-const filters = reactive({
-  accountId: undefined as number | undefined,
-  isRead: undefined as boolean | undefined,
-  isForwarded: undefined as boolean | undefined,
-})
+const formatAddress = (addr: MailAddress) => {
+  return addr.name ? `${addr.name} <${addr.address}>` : addr.address
+}
 
-// 账号选项
-const accountOptions = computed(() => [
-  { label: '全部', value: undefined },
-  ...accounts.value.map(account => ({
-    label: account.name,
-    value: account.id
-  }))
-])
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr)
+  return date.toLocaleString()
+}
 
-// 已读状态选项
-const readStatusOptions = [
-  { label: '全部', value: undefined },
-  { label: '未读', value: false },
-  { label: '已读', value: true }
-]
+const formatSize = (bytes: number) => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
 
-// 转发状态选项
-const forwardedOptions = [
-  { label: '全部', value: undefined },
-  { label: '已转发', value: true },
-  { label: '未转发', value: false }
-]
-
-// 每页数量选项
-const pageSizeOptions = [
-  { label: '10', value: 10 },
-  { label: '20', value: 20 },
-  { label: '50', value: 50 },
-  { label: '100', value: 100 }
-]
-
-const pagination = reactive({
-  page: 1,
-  pageSize: 20,
-  total: 0,
-  totalPages: 0,
-})
-
-// 排序状态
-type SortField = 'sender' | 'subject' | 'date' | null
-type SortOrder = 'asc' | 'desc'
-const sortField = ref<SortField>(null)
-const sortOrder = ref<SortOrder>('desc')
-
-// 切换排序
-const toggleSort = (field: SortField) => {
-  if (sortField.value === field) {
-    // 同一字段，切换排序方向
-    if (sortOrder.value === 'desc') {
-      sortOrder.value = 'asc'
-    } else {
-      // 已经是升序，取消排序
-      sortField.value = null
-    }
+// 排序处理
+const toggleSort = (key: string) => {
+  if (sortKey.value === key) {
+    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
   } else {
-    // 新字段，默认降序
-    sortField.value = field
+    sortKey.value = key
     sortOrder.value = 'desc'
   }
 }
 
-// 获取排序图标
-const getSortIcon = (field: SortField): string => {
-  if (sortField.value !== field) return 'arrow-up-down'
-  return sortOrder.value === 'desc' ? 'arrow-down' : 'arrow-up'
+const getSortIcon = (key: string) => {
+  if (sortKey.value !== key) return 'minus' // 或者 space
+  return sortOrder.value === 'asc' ? 'chevron-up' : 'chevron-down'
 }
 
-// 获取排序样式类
-const getSortClass = (field: SortField): string => {
-  if (sortField.value !== field) return 'inactive'
-  return 'active'
+const getSortClass = (key: string) => {
+  return { active: sortKey.value === key }
 }
 
-// 计算排序后的邮件列表
 const sortedMails = computed(() => {
-  if (!sortField.value) return mails.value
+  // 注意：这里仅对当前页排序，理想情况应该是后端排序
+  // 假设后端返回的数据已经是按时间倒序的，这里前端排序作为辅助
+  const list = [...mails.value]
+  list.sort((a, b) => {
+    let valA: any = a.receivedAt
+    let valB: any = b.receivedAt
 
-  const sorted = [...mails.value].sort((a, b) => {
-    let compareResult = 0
-
-    switch (sortField.value) {
-      case 'sender':
-        const senderA = getSenderName(a.from).toLowerCase()
-        const senderB = getSenderName(b.from).toLowerCase()
-        compareResult = senderA.localeCompare(senderB, 'zh-CN')
-        break
-      case 'subject':
-        const subjectA = (a.subject || '').toLowerCase()
-        const subjectB = (b.subject || '').toLowerCase()
-        compareResult = subjectA.localeCompare(subjectB, 'zh-CN')
-        break
-      case 'date':
-        compareResult = new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime()
-        break
+    if (sortKey.value === 'subject') {
+      valA = a.subject || ''
+      valB = b.subject || ''
+    } else if (sortKey.value === 'sender') {
+      valA = getSenderName(a.from) || ''
+      valB = getSenderName(b.from) || ''
     }
 
-    return sortOrder.value === 'desc' ? -compareResult : compareResult
+    if (valA < valB) return sortOrder.value === 'asc' ? -1 : 1
+    if (valA > valB) return sortOrder.value === 'asc' ? 1 : -1
+    return 0
   })
-
-  return sorted
+  return list
 })
 
-// 跳转页码
-const jumpPage = ref(1)
-
-const formatAddress = (addr: MailAddress): string => {
-  return addr.name ? `${addr.name} <${addr.address}>` : addr.address
-}
-
-const formatDate = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-const formatSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+const loadMails = async () => {
+  loading.value = true
+  try {
+    // 构造查询参数
+    const query = {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      accountId: filters.accountId,
+      isRead: filters.isRead,
+      isForwarded: filters.isForwarded,
+    }
+    const res = await mailApi.list(query)
+    mails.value = res.items
+    pagination.total = res.total
+    pagination.totalPages = Math.ceil(res.total / pagination.pageSize) || 1
+  } catch (e) {
+    console.error('Failed to load mails:', e)
+    // mock data if api fails (dev mode?)
+    // mails.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
 const loadAccounts = async () => {
@@ -459,52 +443,29 @@ const loadAccounts = async () => {
   }
 }
 
-const loadMails = async () => {
-  loading.value = true
-  try {
-    const result = await mailApi.list({
-      ...filters,
-      page: pagination.page,
-      pageSize: pagination.pageSize,
-    })
-    mails.value = result.items
-    pagination.total = result.total
-    pagination.totalPages = result.totalPages
-  } catch (e) {
-    console.error('Failed to load mails:', e)
-    alert(`加载失败: ${(e as Error).message}`)
-  } finally {
-    loading.value = false
-  }
-}
-
 const goToPage = (page: number) => {
+  if (page < 1 || page > pagination.totalPages) return
   pagination.page = page
-  jumpPage.value = page
   loadMails()
 }
 
 const onPageSizeChange = () => {
-  // 切换每页数量时，重置到第一页
   pagination.page = 1
-  jumpPage.value = 1
   loadMails()
 }
 
 const handleJumpPage = () => {
-  // 校验页码范围
-  let targetPage = jumpPage.value
-  if (targetPage < 1) targetPage = 1
-  if (targetPage > pagination.totalPages) targetPage = pagination.totalPages
-  jumpPage.value = targetPage
-  goToPage(targetPage)
+  if (jumpPage.value >= 1 && jumpPage.value <= pagination.totalPages) {
+    goToPage(jumpPage.value)
+  } else {
+    jumpPage.value = pagination.page
+  }
 }
 
 const openMailDetail = async (mail: StoredMail) => {
   selectedMail.value = mail
-  // 如果有HTML内容，默认显示HTML，否则显示纯文本
+  // 优先显示HTML内容，如果没有则显示纯文本
   contentTab.value = mail.htmlContent ? 'html' : 'text'
-
   showDetail.value = true
 
   // 标记为已读
@@ -512,8 +473,12 @@ const openMailDetail = async (mail: StoredMail) => {
     try {
       await mailApi.markAsRead(mail.id)
       mail.isRead = true
+      // 更新列表中的状态
+      const idx = mails.value.findIndex(m => m.id === mail.id)
+      if (idx !== -1) mails.value[idx].isRead = true
+      emit('refresh') // 通知父组件（如果是侧边栏模式）
     } catch (e) {
-      console.error('Failed to mark as read:', e)
+      console.error('Failed to mark read:', e)
     }
   }
 }
@@ -525,101 +490,61 @@ const closeDetail = () => {
 
 const switchToHtmlTab = () => {
   contentTab.value = 'html'
-  // 依赖 iframe @load 事件触发调整
 }
 
-// 根据HTML内容宽度自动调整弹窗宽度和高度
 const adjustModalSize = () => {
-  if (!htmlIframe.value) return
-
-  try {
-    const iframeDoc = htmlIframe.value.contentDocument || htmlIframe.value.contentWindow?.document
-    if (!iframeDoc) return
-
-    const body = iframeDoc.body
-    const html = iframeDoc.documentElement
-    if (!body) return
-
-    // 获取内容实际高度
-    const bodyHeight = body.scrollHeight
-    const htmlHeight = html ? html.scrollHeight : 0
-    const contentHeight = Math.max(bodyHeight, htmlHeight)
-
-    const minIframeHeight = 600 // iframe最小高度
-
-    // 设置iframe高度为实际内容高度，让外层容器滚动
-    if (htmlIframe.value) {
-      const targetHeight = Math.max(minIframeHeight, contentHeight + 40)
-      htmlIframe.value.style.height = `${targetHeight}px`
-    }
-  } catch (e) {
-    console.error('Failed to adjust modal size:', e)
-  }
-}
-
-const forwardMail = async (mail: StoredMail) => {
-  try {
-    await mailApi.forward(mail.id)
-    mail.isForwarded = true
-    emit('refresh')
-    alert('转发成功')
-  } catch (e) {
-    console.error('Failed to forward mail:', e)
-    alert(`转发失败: ${(e as Error).message}`)
-  }
+  // 可以在这里根据 iframe 内容调整模态框大小，或者 iframe 自适应
 }
 
 const deleteMail = async (mail: StoredMail) => {
-  if (!confirm(`确定要删除这封邮件吗？\n\n主题：${mail.subject}`)) {
-    return
-  }
-
+  if (!confirm('确定要删除这封邮件吗？')) return
   try {
     await mailApi.delete(mail.id)
-    await loadMails()
-    emit('refresh')
+    loadMails()
   } catch (e) {
     console.error('Failed to delete mail:', e)
-    alert(`删除失败: ${(e as Error).message}`)
+    alert('删除失败')
   }
 }
 
+const openForwardModal = (mail: StoredMail) => {
+  forwardMail.value = mail
+  showForwardModal.value = true
+}
+
+const onForwarded = () => {
+  // 刷新邮件列表以更新转发状态
+  loadMails()
+  emit('refresh')
+}
+
 onMounted(() => {
-  loadAccounts()
+  loadAccounts() // 先加载账号，用于筛选
   loadMails()
 })
 </script>
 
 <style scoped lang="scss">
-/* ========== 排序表头样式 ========== */
-.sortable {
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.2s;
+@use '../styles/variables';
 
-  &:hover {
-    background: var(--ml-hover);
-  }
+.mails-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
 }
 
-.sort-icon {
-  display: inline-block;
-  margin-left: 4px;
-  font-size: 12px;
-  opacity: 0.4;
-  transition: opacity 0.2s;
-
-  &.active {
-    opacity: 1;
-    color: var(--ml-primary);
-  }
-}
-
-/* ========== 基础样式 ========== */
 .filter-bar {
   display: flex;
-  gap: 16px;
+  justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.filter-group {
+  display: flex;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
@@ -630,279 +555,493 @@ onMounted(() => {
 
   label {
     font-size: 13px;
-    color: var(--ml-text-secondary);
-  }
-
-  .ml-select {
-    width: 140px;
+    font-weight: 500;
   }
 }
 
-.ml-table tr.unread {
-  font-weight: 500;
+/* 邮件列表样式优化 */
+.mail-list-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* 允许 flex item 缩小 */
+  padding: 0; /* 让表格贴边 */
+  overflow: hidden; /* 防止卡片本身滚动 */
+}
 
-  .mail-subject {
-    color: var(--ml-primary);
+.mail-table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+
+.mail-list-table {
+  width: 100%;
+  table-layout: fixed; // 固定表格布局，严格控制列宽
+  border-collapse: separate;
+  border-spacing: 0;
+
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--ml-bg);
+
+    th {
+      padding: 12px 16px;
+      font-weight: 600;
+      color: var(--ml-text-secondary);
+      border-bottom: 2px solid var(--ml-border);
+      text-align: left;
+      white-space: nowrap;
+    }
+  }
+
+  tbody tr {
+    transition: background 0.2s;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--ml-hover);
+
+      .action-btns {
+        opacity: 1;
+      }
+    }
+
+    &.unread {
+      background: rgba(var(--ml-primary-rgb), 0.04);
+
+      .sender-name, .subject-text {
+        font-weight: 700;
+        color: var(--ml-text);
+      }
+    }
+  }
+
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--ml-border);
+    vertical-align: middle;
+    overflow: hidden; // 防止内容溢出单元格
+    max-width: 0; // 配合 table-layout: fixed 强制截断
   }
 }
 
-.ml-table tr {
-  cursor: pointer;
+/* 列定义 */
+.col-sender {
+  width: 12%;
+  min-width: 180px;
 }
 
-.mail-icon {
+.col-subject {
+  width: 64%;
+  min-width: 300px;
+}
+
+.col-date {
+  width: 8%;
+  min-width: 140px;
+  white-space: nowrap;
   text-align: center;
 }
 
-.mail-from {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.col-action {
+  width: 6%;
+  min-width: 100px;
+  text-align: center;
 }
 
-.mail-subject {
-  max-width: 300px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.attachment-icon {
-  margin-left: 4px;
-}
-
-.mail-date {
-  color: var(--ml-text-secondary);
-  font-size: 13px;
-}
-
-.action-btns {
+.mail-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   display: flex;
-  gap: 4px;
+  align-items: center;
   justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+}
 
-  .ml-btn.small {
-    min-width: 32px;
-    height: 32px;
-    padding: 0;
-    display: inline-flex;
+.sender-cell-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0; // 允许 flex 子项缩小
+  max-width: 100%; // 限制最大宽度
+}
+
+.sender-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0; // 允许缩小
+  flex: 1; // 占据剩余空间
+
+  .sender-name {
+    font-size: 14px;
+    color: var(--ml-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sender-email {
+    font-size: 12px;
+    color: var(--ml-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.subject-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0; // 允许缩小
+  max-width: 100%; // 限制最大宽度
+  overflow: hidden; // 防止溢出
+
+  .subject-text {
+    font-size: 14px;
+    display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 8px;
+    color: var(--ml-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-    :deep(.icon) {
-      margin: 0;
+  .subject-snippet {
+    font-size: 12px;
+    color: var(--ml-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block; // 改为 block 避免 flex 导致的溢出
+
+    // 徽章样式内联显示
+    .attachment-badge,
+    .forward-badge {
+      display: inline-flex;
+      vertical-align: middle;
+      margin-right: 4px;
     }
   }
 }
 
-/* ========== 弹窗样式 ========== */
-.ml-modal-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+.date-cell {
+  text-align: center;
+  font-size: 13px;
+  color: var(--ml-text-secondary);
 }
 
-.ml-modal {
-  background: var(--ml-bg, #fff);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  width: 900px; /* 默认宽度 */
-  max-width: 95vw;
-  max-height: 90vh;
-}
-
-.ml-modal.is-html {
-  width: 1100px; /* HTML模式下使用更宽的窗口 */
-  min-height: 70vh; /* 确保HTML模式下有足够的高度 */
-}
-
-
-
-.ml-modal-body {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  height: 100%;
-}
-
-.mail-info-sidebar {
-  width: 320px;
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--ml-primary);
   flex-shrink: 0;
-  border-right: 1px solid var(--ml-border, #eee);
-  display: flex;
-  flex-direction: column;
-  background: var(--ml-bg-secondary, #f9f9f9);
-  padding: 20px;
-  overflow-y: auto;
 }
 
-.mail-content-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: #fff;
-  min-width: 0;
+.attachment-badge, .forward-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--ml-hover);
+  border: 1px solid var(--ml-border);
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
-.mail-content {
-  flex: 1;
-  overflow: auto;
-  padding: 0;
-  position: relative;
+.forward-badge {
+  background: #e6f7ff;
+  color: #1890ff;
+  border-color: #91d5ff;
 }
 
-.text-content {
-  padding: 30px;
-  white-space: pre-wrap;
-  font-family: inherit;
-  line-height: 1.6;
-  color: var(--ml-text, #333);
+.action-btns {
+  display: inline-flex;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0.6; /* 提高默认可见度 */
+  transition: opacity 0.2s;
 }
 
-.html-content {
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: block;
+tbody tr:hover .action-btns {
+  opacity: 1; /* 悬停时完全显示 */
 }
 
-/* Sidebar elements */
-.sidebar-header {
+.action-btns .ml-btn.small {
+  min-width: 32px;
+  height: 32px;
+  padding: 6px;
+}
+
+/* 分页控件 */
+.ml-pagination {
+  padding: 12px 16px;
+  border-top: 1px solid var(--ml-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  background: var(--ml-bg-container);
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.sidebar-title {
-  font-size: 18px;
-  font-weight: 600;
+.pagination-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .page-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--ml-border);
+    border-radius: 4px;
+    background: var(--ml-bg);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ml-text);
+    transition: var(--ml-transition);
+
+    &:hover:not(:disabled) {
+      border-color: var(--ml-primary);
+      color: var(--ml-primary);
+      background: var(--ml-primary-light);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+
+  .page-info {
+    margin-left: 12px;
+    font-size: 13px;
+    color: var(--ml-text);
+    white-space: nowrap;
+  }
 }
 
-.ml-modal-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  color: var(--ml-text-secondary, #999);
+/* 邮件详情侧边栏样式 */
+.mail-detail-modal {
+  width: 90%;
+  height: 90%;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+}
 
-  &:hover {
-    background: rgba(0,0,0,0.05);
-    color: var(--ml-text, #333);
+.mail-detail-body {
+  flex: 1;
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+
+.mail-info-sidebar {
+  width: 280px; // 减小侧边栏宽度
+  background: var(--ml-bg-base);
+  border-right: 1px solid var(--ml-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0; // 防止压缩
+}
+
+.sidebar-header {
+  padding: 12px 16px; // 减小pading
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--ml-border);
+  flex-shrink: 0; // 防止压缩
+
+  .sidebar-title {
+    font-size: 15px; // 略微减小字号
+    font-weight: 600;
   }
 }
 
 .content-tabs {
+  padding: 8px 12px; // 减小pading
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--ml-border, #eee);
-  padding-bottom: 10px;
-}
+  gap: 6px; // 减小间距
+  border-bottom: 1px solid var(--ml-border);
 
-.tab-btn {
-  background: none;
-  border: none;
-  padding: 6px 12px;
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ml-text-secondary, #666);
+  .tab-btn {
+    flex: 1;
+    padding: 6px;
+    border: 1px solid var(--ml-border);
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 13px;
 
-  &.active {
-    background: var(--ml-primary-bg, #e6f7ff);
-    color: var(--ml-primary, #1890ff);
-  }
-
-  &:hover:not(.active) {
-    background: rgba(0,0,0,0.03);
+    &.active {
+      background: var(--ml-primary);
+      border-color: var(--ml-primary);
+      color: white;
+    }
   }
 }
 
 .mail-header-info {
-  margin-bottom: 20px;
-}
+  padding: 12px 16px; // 减小pading
+  overflow-y: auto;
+  border-bottom: 1px solid var(--ml-border);
+  flex-shrink: 0; // 防止压缩
 
-.info-row {
-  margin-bottom: 12px;
-  font-size: 13px;
-}
+  .info-row {
+    margin-bottom: 10px; // 减小间距
 
-.info-label {
-  display: block;
-  color: var(--ml-text-secondary, #999);
-  margin-bottom: 4px;
-}
+    &:last-child {
+      margin-bottom: 0;
+    }
 
-.info-value {
-  display: block;
-  color: var(--ml-text, #333);
-  word-break: break-all;
+    .info-label {
+      display: block;
+      font-size: 11px; // 略微减小
+      color: var(--ml-text-secondary);
+      margin-bottom: 2px;
+    }
+
+    .info-value {
+      font-size: 13px; // 略微减小
+      color: var(--ml-text);
+      word-break: break-all;
+    }
+  }
 }
 
 .attachments-section {
-  margin-top: 20px;
-  border-top: 1px solid var(--ml-border, #eee);
-  padding-top: 20px;
-}
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ml-border);
+  overflow-y: auto;
+  max-height: 200px; // 限制最大高度
 
-.section-title {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ml-text);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .attachment-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
 }
 
 .attachment-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--ml-border, #eee);
+  padding: 6px 8px; // 减小pading
+  border: 1px solid var(--ml-border);
   border-radius: 4px;
-  margin-bottom: 8px;
-  font-size: 12px;
-  background: #fff;
+  background: var(--ml-bg-container);
+  transition: var(--ml-transition);
+
+  &:hover {
+    border-color: var(--ml-primary);
+    background: var(--ml-bg-hover);
+  }
 
   .att-info {
+    flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
 
   .att-name {
+    font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .att-size {
-    color: var(--ml-text-secondary, #999);
     font-size: 11px;
+    color: var(--ml-text-secondary);
   }
 }
 
 .mail-actions {
-  margin-top: auto;
-  padding-top: 20px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ml-border);
+  margin-top: auto; // 推到底部
+  flex-shrink: 0;
+
+  .ml-btn {
+    width: 100%;
+  }
+}
+
+.mail-content-main {
+  flex: 1;
+  min-width: 0; // 允许收缩
+  background: var(--ml-bg-base);
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mail-content {
+  flex: 1;
+  min-height: 0; // 关键：允许 flex 子项收缩，防止溢出
+  background: var(--ml-bg-container);
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  margin: 0;
+
+  .text-content {
+    flex: 1;
+    padding: 16px;
+    white-space: pre-wrap;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-y: auto;
+    color: var(--ml-text);
+    margin: 0; // 移除默认 pre margin
+  }
+
+  .html-content {
+    flex: 1;
+    width: 100%;
+    height: 100%; // 确保 iframe 填满容器
+    border: none;
+    display: block;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 </style>
+

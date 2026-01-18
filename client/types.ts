@@ -14,6 +14,8 @@ export interface MailAccount {
   imapHost: string
   imapPort: number
   imapTls: boolean
+  /** 是否发送 IMAP ID 命令（部分邮件服务商如网易需要） */
+  sendImapId?: boolean
   enabled: boolean
   proxyUrl?: string
   status: MailAccountStatus
@@ -62,12 +64,16 @@ export type ForwardElementType =
   | 'from'
   | 'to'
   | 'date'
+  | 'body'
   | 'text'
   | 'html'
   | 'markdown'
   | 'attachments'
   | 'separator'
   | 'custom'
+
+/** 转发模式 */
+export type ForwardMode = 'text' | 'image' | 'hybrid'
 
 /** 转发元素配置 */
 export interface ForwardElement {
@@ -115,6 +121,16 @@ export interface RenderConfig {
   borderColor: string
 }
 
+/** 正则内容提取配置 */
+export interface RegexConfig {
+  /** 正则表达式模式 */
+  pattern: string
+  /** 正则标志 (i, g, gi 等) */
+  flags?: string
+  /** 输出模板，使用 $1, $2 等引用捕获组 */
+  template?: string
+}
+
 /** 转发规则 */
 export interface ForwardRule {
   id: number
@@ -124,7 +140,9 @@ export interface ForwardRule {
   accountId?: number
   conditions: ForwardCondition[]
   targets: ForwardTarget[]
+  forwardMode?: ForwardMode
   elements: ForwardElement[]
+  regexConfig?: RegexConfig
   customCss?: string
   renderConfig: RenderConfig
   createdAt: string
@@ -167,4 +185,16 @@ export interface Stats {
   unreadCount: number
   ruleCount: number
   enabledRuleCount: number
+}
+
+/** 转发结果 */
+export interface ForwardResult {
+  /** 是否全部成功 */
+  success: boolean
+  /** 成功发送的目标数量 */
+  successCount: number
+  /** 总目标数量 */
+  totalTargets: number
+  /** 错误消息列表 */
+  errors?: string[]
 }

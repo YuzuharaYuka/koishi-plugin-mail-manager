@@ -18,6 +18,8 @@ export const LogModule = {
   RULE: '规则',           // 转发规则相关
   SYSTEM: '系统',         // 系统级操作（启动、卸载等）
   CLEANUP: '清理',        // 数据清理相关
+  MAIL: '邮件',           // 邮件处理相关
+  IMAP: 'IMAP',           // IMAP 连接相关
 } as const
 
 /** 全局 logger 实例（用于在初始化前访问） */

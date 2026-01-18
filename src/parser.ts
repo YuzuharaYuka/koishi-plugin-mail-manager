@@ -4,12 +4,10 @@
  * 策略：
  * 1. 优先使用 postal-mime（快速路径，速度提升 10-20 倍）
  * 2. 遇到错误时回退到 mailparser（兼容性路径）
- * 3. 使用 linkedom 处理 HTML（支持 DOM API，可转换为图片）
  */
 
 import PostalMime from 'postal-mime'
 import { simpleParser, ParsedMail as MailparserParsedMail } from 'mailparser'
-import { parseHTML } from 'linkedom'
 import { Logger } from 'koishi'
 import type { MailAddress, MailAttachment } from './types'
 
@@ -58,12 +56,115 @@ export async function parseMail(source: Buffer | Uint8Array): Promise<ParsedMail
   }
 }
 
+/**
+ * 解析邮件日期字符串
+ * 支持多种常见日期格式，增强兼容性
+ *
+ * @param dateStr 原始日期字符串
+ * @returns 解析后的 Date 对象，解析失败返回 undefined
+ */
+export function parseMailDate(dateStr: string | undefined | null): Date | undefined {
+  if (!dateStr || typeof dateStr !== 'string') return undefined
+
+  const trimmed = dateStr.trim()
+  if (trimmed.length === 0) return undefined
+
+  // 首先尝试原生 Date 解析
+  let date = new Date(trimmed)
+  if (!isNaN(date.getTime())) {
+    return date
+  }
+
+  // 尝试常见的非标准格式
+  const patterns: Array<{ regex: RegExp; parser: (match: RegExpMatchArray) => Date | null }> = [
+    // RFC 2822: "Mon, 01 Jan 2024 12:00:00 +0800"
+    {
+      regex: /^\w{3},\s*(\d{1,2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})\s*([+-]\d{4})?/i,
+      parser: (m) => {
+        const months: Record<string, number> = {
+          jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+          jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+        }
+        const month = months[m[2].toLowerCase()]
+        if (month === undefined) return null
+        return new Date(Date.UTC(
+          parseInt(m[3]), month, parseInt(m[1]),
+          parseInt(m[4]), parseInt(m[5]), parseInt(m[6])
+        ))
+      }
+    },
+    // ISO 8601: "2024-01-01T12:00:00Z" or "2024-01-01T12:00:00+08:00"
+    {
+      regex: /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/i,
+      parser: (m) => new Date(m[0])
+    },
+    // 中文日期格式: "2024年1月1日 12:00:00" 或 "2024年01月01日 12:00"
+    {
+      regex: /^(\d{4})年(\d{1,2})月(\d{1,2})日\s*(\d{1,2})?:?(\d{2})?:?(\d{2})?/,
+      parser: (m) => new Date(
+        parseInt(m[1]),
+        parseInt(m[2]) - 1,
+        parseInt(m[3]),
+        m[4] ? parseInt(m[4]) : 0,
+        m[5] ? parseInt(m[5]) : 0,
+        m[6] ? parseInt(m[6]) : 0
+      )
+    },
+    // 斜杠日期: "01/01/2024 12:00:00" 或 "2024/01/01 12:00"
+    {
+      regex: /^(\d{1,4})\/(\d{1,2})\/(\d{1,4})\s*(\d{1,2})?:?(\d{2})?:?(\d{2})?/,
+      parser: (m) => {
+        // 判断是 MM/DD/YYYY 还是 YYYY/MM/DD
+        const first = parseInt(m[1])
+        const second = parseInt(m[2])
+        const third = parseInt(m[3])
+        let year: number, month: number, day: number
+        if (first > 1000) {
+          // YYYY/MM/DD
+          year = first
+          month = second - 1
+          day = third
+        } else {
+          // MM/DD/YYYY
+          year = third
+          month = first - 1
+          day = second
+        }
+        return new Date(
+          year, month, day,
+          m[4] ? parseInt(m[4]) : 0,
+          m[5] ? parseInt(m[5]) : 0,
+          m[6] ? parseInt(m[6]) : 0
+        )
+      }
+    }
+  ]
+
+  for (const { regex, parser } of patterns) {
+    const match = trimmed.match(regex)
+    if (match) {
+      try {
+        const result = parser(match)
+        if (result && !isNaN(result.getTime())) {
+          return result
+        }
+      } catch {
+        // 继续尝试下一个模式
+      }
+    }
+  }
+
+  // 所有尝试都失败
+  logger.debug('无法解析日期字符串: %s', trimmed)
+  return undefined
+}
+
 /** 使用 postal-mime 解析（快速） */
 async function parseWithPostalMime(source: Buffer | Uint8Array): Promise<ParsedMail> {
   const parser = new PostalMime()
   const email = await parser.parse(source)
 
-  let parsedDate = email.date ? new Date(email.date) : undefined
+  let parsedDate = email.date ? parseMailDate(email.date) : undefined
 
   // 如果 postal-mime 没有解析到日期，尝试手动从原始数据中提取
   if (!parsedDate) {
@@ -72,25 +173,19 @@ async function parseWithPostalMime(source: Buffer | Uint8Array): Promise<ParsedM
 
     if (dateMatch) {
       const dateStr = dateMatch[1].trim()
-      logger.warn('postal-mime: No date parsed, trying manual extraction. Subject: %s', email.subject || '(no subject)')
-      logger.warn('  → Raw Date header: %s', dateStr)
+      logger.debug('postal-mime: No date parsed, trying manual extraction. Subject: %s', email.subject || '(no subject)')
+      logger.debug('  → Raw Date header: %s', dateStr)
 
-      try {
-        // 尝试解析原始日期字符串
-        parsedDate = new Date(dateStr)
+      // 使用增强的日期解析函数
+      parsedDate = parseMailDate(dateStr)
 
-        // 验证日期是否有效
-        if (isNaN(parsedDate.getTime())) {
-          logger.warn('  → Manual parse failed: Invalid date')
-          parsedDate = undefined
-        } else {
-          logger.info('  → Manual parse succeeded: %s', parsedDate.toISOString())
-        }
-      } catch (err) {
-        logger.warn('  → Manual parse error: %s', err.message)
+      if (parsedDate) {
+        logger.debug('  → Manual parse succeeded: %s', parsedDate.toISOString())
+      } else {
+        logger.debug('  → Manual parse failed: Unable to parse date')
       }
     } else {
-      logger.warn('postal-mime: No Date header in raw email. Subject: %s', email.subject || '(no subject)')
+      logger.debug('postal-mime: No Date header in raw email. Subject: %s', email.subject || '(no subject)')
     }
   }
 
@@ -226,7 +321,8 @@ function parseMailparserAttachments(attachments: any[]): MailAttachment[] | unde
 }
 
 /**
- * 清理和美化 HTML（使用 linkedom）
+ * 清理 HTML 中的危险标签和属性
+ * 使用简单的正则替换，无外部依赖
  *
  * @param html 原始 HTML
  * @returns 清理后的 HTML
@@ -235,36 +331,36 @@ export function sanitizeHtml(html: string): string {
   if (!html) return ''
 
   try {
-    const { document } = parseHTML(html)
+    let result = html
 
-    // 移除危险标签
-    const dangerousTags = ['script', 'style', 'iframe', 'object', 'embed', 'link']
-    dangerousTags.forEach(tag => {
-      const elements = document.querySelectorAll(tag)
-      elements.forEach(el => el.remove())
-    })
+    // 移除危险标签及其内容
+    const dangerousTags = ['script', 'iframe', 'object', 'embed']
+    for (const tag of dangerousTags) {
+      result = result.replace(new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}>`, 'gi'), '')
+      result = result.replace(new RegExp(`<${tag}[^>]*\\/?>`, 'gi'), '')
+    }
 
-    // 移除危险属性
-    const dangerousAttrs = ['onclick', 'onerror', 'onload', 'onmouseover', 'onmouseout']
-    const allElements = document.querySelectorAll('*')
-    allElements.forEach(el => {
-      dangerousAttrs.forEach(attr => {
-        if (el.hasAttribute(attr)) {
-          el.removeAttribute(attr)
-        }
-      })
-    })
+    // 移除 style 和 link 标签（可选，保留邮件样式可能更好）
+    // result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    // result = result.replace(/<link[^>]*\/?>/gi, '')
 
-    // 返回清理后的 HTML
-    return document.toString()
+    // 移除危险事件属性
+    const dangerousAttrs = ['onclick', 'onerror', 'onload', 'onmouseover', 'onmouseout', 'onfocus', 'onblur']
+    for (const attr of dangerousAttrs) {
+      result = result.replace(new RegExp(`\\s${attr}\\s*=\\s*["'][^"']*["']`, 'gi'), '')
+      result = result.replace(new RegExp(`\\s${attr}\\s*=\\s*[^\\s>]+`, 'gi'), '')
+    }
+
+    return result
   } catch (err) {
-    logger.warn('HTML 清理失败:', err.message)
-    return html // 失败时返回原始内容
+    logger.warn('HTML 清理失败:', err)
+    return html
   }
 }
 
 /**
- * 将 HTML 转换为纯文本（使用 linkedom）
+ * 将 HTML 转换为纯文本
+ * 使用简单的正则替换，无外部依赖
  *
  * @param html 原始 HTML
  * @returns 纯文本内容
@@ -273,31 +369,45 @@ export function htmlToText(html: string): string {
   if (!html) return ''
 
   try {
-    const { document } = parseHTML(html)
+    let result = html
 
-    // 移除不显示的标签
-    const hiddenTags = ['script', 'style', 'head']
-    hiddenTags.forEach(tag => {
-      const elements = document.querySelectorAll(tag)
-      elements.forEach(el => el.remove())
-    })
+    // 移除 script 和 style 标签及其内容
+    result = result.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
 
-    // 提取文本内容
-    return document.body?.textContent?.trim() || ''
+    // 将换行标签转换为换行符
+    result = result.replace(/<br\s*\/?>/gi, '\n')
+    result = result.replace(/<\/p>/gi, '\n\n')
+    result = result.replace(/<\/div>/gi, '\n')
+    result = result.replace(/<\/tr>/gi, '\n')
+    result = result.replace(/<\/li>/gi, '\n')
+
+    // 移除所有 HTML 标签
+    result = result.replace(/<[^>]+>/g, '')
+
+    // 解码常见 HTML 实体
+    result = result.replace(/&nbsp;/g, ' ')
+    result = result.replace(/&lt;/g, '<')
+    result = result.replace(/&gt;/g, '>')
+    result = result.replace(/&amp;/g, '&')
+    result = result.replace(/&quot;/g, '"')
+    result = result.replace(/&#39;/g, "'")
+
+    // 清理多余空白
+    result = result.replace(/\n\s*\n\s*\n/g, '\n\n')
+    result = result.trim()
+
+    return result
   } catch (err) {
-    logger.warn('HTML 转文本失败:', err.message)
-    // 简单的正则替换作为回退
-    return html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
+    logger.warn('HTML 转文本失败:', err)
+    return html.replace(/<[^>]+>/g, '').trim()
   }
 }
 
 /**
- * 预处理 HTML 用于截图（添加样式、限制宽度等）
+ * 预处理 HTML 用于截图
+ * 注意：现在使用 Puppeteer 渲染，此函数可能不再需要
+ * 保留用于向后兼容
  *
  * @param html 原始 HTML
  * @param options 配置项
@@ -317,65 +427,36 @@ export function prepareHtmlForScreenshot(
     padding = 20,
   } = options
 
-  try {
-    const { document } = parseHTML(html)
-
-    // 创建样式
-    const style = document.createElement('style')
-    style.textContent = `
-      * {
-        max-width: 100%;
-        word-wrap: break-word;
-      }
-      body {
-        max-width: ${maxWidth}px;
-        margin: 0 auto;
-        padding: ${padding}px;
-        background-color: ${backgroundColor};
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        font-size: 14px;
-        line-height: 1.6;
-        color: #333;
-      }
-      img {
-        max-width: 100%;
-        height: auto;
-      }
-      table {
-        border-collapse: collapse;
-        width: 100%;
-      }
-      table td, table th {
-        border: 1px solid #ddd;
-        padding: 8px;
-      }
-    `
-
-    // 插入样式到 head
-    if (!document.head) {
-      const head = document.createElement('head')
-      document.documentElement.insertBefore(head, document.body)
-    }
-    document.head.appendChild(style)
-
-    return document.toString()
-  } catch (err) {
-    logger.warn('HTML 预处理失败:', err.message)
-    // 回退：包裹在基础样式中
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          body { max-width: ${maxWidth}px; margin: 0 auto; padding: ${padding}px; background: ${backgroundColor}; }
-          img { max-width: 100%; height: auto; }
-        </style>
-      </head>
-      <body>${html}</body>
-      </html>
-    `
+  // 检查是否已经是完整的 HTML 文档
+  if (/<html[\s>]/i.test(html) && /<body[\s>]/i.test(html)) {
+    return html
   }
+
+  // 包裹在基础样式中
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      max-width: ${maxWidth}px;
+      margin: 0 auto;
+      padding: ${padding}px;
+      background: ${backgroundColor};
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Microsoft YaHei', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #333;
+    }
+    img { max-width: 100%; height: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #ddd; padding: 8px; }
+  </style>
+</head>
+<body>${html}</body>
+</html>`
 }
 
 /** 获取解析器统计信息 */

@@ -54,13 +54,13 @@ function registerCleanupCommand(ctx: Context, config: Config) {
             return `预览：将清理 ${count} 封过期邮件（早于 ${cutoffDate.toLocaleString()}）`
           }
 
-          return `✅ 清理完成：已删除 ${count} 封过期邮件`
+          return `清理完成：已删除 ${count} 封过期邮件`
         }
 
         // 3. Handle "All Mails" cleanup (Preview only for safety)
         if (options.all) {
           const totalMails = await ctx.database.eval('mail_manager.mails', row => $.count(row.id)) as number
-          return `⚠️ 预览：将清理 ${totalMails || 0} 封邮件（全部）\n\n如需执行，请联系管理员在数据库中直接操作`
+          return `预览：将清理 ${totalMails || 0} 封邮件（全部）\n\n如需执行，请联系管理员在数据库中直接操作`
         }
 
       } catch (err) {
@@ -80,7 +80,7 @@ function registerMemoryCommand(ctx: Context) {
       const usage = process.memoryUsage()
       const formatMB = (bytes: number) => (bytes / 1024 / 1024).toFixed(2)
 
-      let output = `📊 邮件管理器内存使用情况:\n`
+      let output = `邮件管理器内存使用情况:\n`
       output += `- 堆内存使用: ${formatMB(usage.heapUsed)} MB / ${formatMB(usage.heapTotal)} MB\n`
       output += `- RSS (总内存): ${formatMB(usage.rss)} MB\n`
       output += `- 外部内存: ${formatMB(usage.external)} MB\n`
@@ -95,10 +95,10 @@ function registerMemoryCommand(ctx: Context) {
       // Add database statistics
       try {
         const totalMails = await ctx.database.eval('mail_manager.mails', row => $.count(row.id), {}) as number
-        output += `\n\n📧 数据库统计:\n`
+        output += `\n\n数据库统计:\n`
         output += `- 总邮件数: ${totalMails}`
       } catch (err) {
-        output += `\n\n❌ 无法获取数据库统计`
+        output += `\n\n无法获取数据库统计`
       }
 
       return output
@@ -113,7 +113,7 @@ function registerGcCommand(ctx: Context) {
   ctx.command('mail.gc', '手动触发垃圾回收')
     .action(async () => {
       if (!global.gc) {
-        return '❌ 未启用手动垃圾回收\n请使用以下方式启动 Koishi:\nkoishi start --node-arg=--expose-gc'
+        return '未启用手动垃圾回收\n请使用以下方式启动 Koishi:\nkoishi start --node-arg=--expose-gc'
       }
 
       const before = process.memoryUsage()
@@ -127,6 +127,6 @@ function registerGcCommand(ctx: Context) {
       const after = process.memoryUsage()
       const freedMB = ((before.heapUsed - after.heapUsed) / 1024 / 1024).toFixed(2)
 
-      return `✅ 垃圾回收完成\n释放内存: ${freedMB} MB\n当前堆内存: ${(after.heapUsed / 1024 / 1024).toFixed(2)} MB`
+      return `垃圾回收完成\n释放内存: ${freedMB} MB\n当前堆内存: ${(after.heapUsed / 1024 / 1024).toFixed(2)} MB`
     })
 }

@@ -139,6 +139,57 @@ class ApiRegistrar {
     this.addListener('mail-manager/rules/update', (id: number, data: Partial<ForwardRule>) => core.updateRule(id, data))
 
     this.addListener('mail-manager/rules/delete', (id: number) => core.deleteRule(id))
+
+    // 新增：规则测试 API
+    this.addListener('mail-manager/rules/test', async (ruleId: number, mailId: number) => {
+      return await core.testRule(ruleId, mailId)
+    })
+
+    // 新增：规则导出 API
+    this.addListener('mail-manager/rules/export', async () => {
+      const rules = await core.getRules()
+      return {
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        rules: rules.map(r => ({
+          ...r,
+          id: undefined, // 导出时移除 ID
+          createdAt: undefined,
+          updatedAt: undefined,
+        })),
+      }
+    })
+
+    // 新增：规则导入 API
+    this.addListener('mail-manager/rules/import', async (data: { version: string; rules: Partial<ForwardRule>[] }) => {
+      if (!data || !data.rules || !Array.isArray(data.rules)) {
+        throw new Error('无效的导入数据格式')
+      }
+
+      let imported = 0
+      let skipped = 0
+
+      for (const ruleData of data.rules) {
+        try {
+          // 检查是否已存在同名规则
+          const existingRules = await core.getRules()
+          const duplicate = existingRules.find(r => r.name === ruleData.name)
+
+          if (duplicate) {
+            skipped++
+            continue
+          }
+
+          await core.createRule(ruleData)
+          imported++
+        } catch (e) {
+          logger.warn('导入规则失败: %s', (e as Error).message)
+          skipped++
+        }
+      }
+
+      return { imported, skipped }
+    })
   }
 
   /**
@@ -169,6 +220,91 @@ class ApiRegistrar {
         unreadCount: unreadMails.total,
         ruleCount: rules.length,
         enabledRuleCount: rules.filter(r => r.enabled).length,
+      }
+    })
+
+    // 健康检查 API
+    this.addListener('mail-manager/health', async () => {
+      const accounts = await core.getAccounts()
+      const connectedAccounts = accounts.filter(a => a.status === 'connected')
+      const errorAccounts = accounts.filter(a => a.status === 'error')
+
+      const memoryUsage = process.memoryUsage()
+      const uptime = process.uptime()
+
+      return {
+        status: errorAccounts.length === 0 ? 'healthy' : 'degraded',
+        timestamp: new Date().toISOString(),
+        accounts: {
+          total: accounts.length,
+          connected: connectedAccounts.length,
+          error: errorAccounts.length,
+          errorDetails: errorAccounts.map(a => ({
+            id: a.id,
+            email: a.email,
+            lastError: a.lastError,
+          })),
+        },
+        memory: {
+          heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024),
+          heapTotal: Math.round(memoryUsage.heapTotal / 1024 / 1024),
+          rss: Math.round(memoryUsage.rss / 1024 / 1024),
+          external: Math.round(memoryUsage.external / 1024 / 1024),
+        },
+        uptime: Math.round(uptime),
+      }
+    })
+
+    // 指标监控 API
+    this.addListener('mail-manager/metrics', async () => {
+      const [accounts, mails, rules] = await Promise.all([
+        core.getAccounts(),
+        core.getMails({ pageSize: 1 }),
+        core.getRules()
+      ])
+
+      // 按状态分组账号
+      const accountsByStatus = accounts.reduce((acc, a) => {
+        acc[a.status] = (acc[a.status] || 0) + 1
+        return acc
+      }, {} as Record<string, number>)
+
+      // 最近24小时的邮件统计
+      const oneDayAgo = new Date()
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1)
+
+      const recentMails = await core.getMails({
+        pageSize: 1,
+        startDate: oneDayAgo.toISOString(),
+      })
+
+      const recentForwarded = await this.ctx.database
+        .select('mail_manager.mails')
+        .where({
+          isForwarded: true,
+          forwardedAt: { $gte: oneDayAgo },
+        })
+        .execute()
+
+      return {
+        timestamp: new Date().toISOString(),
+        accounts: {
+          total: accounts.length,
+          byStatus: accountsByStatus,
+        },
+        mails: {
+          total: mails.total,
+          last24h: recentMails.total,
+          forwardedLast24h: recentForwarded.length,
+        },
+        rules: {
+          total: rules.length,
+          enabled: rules.filter(r => r.enabled).length,
+        },
+        memory: {
+          heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          rssMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        },
       }
     })
   }
@@ -211,10 +347,12 @@ class ApiRegistrar {
 
   /**
    * 辅助方法：批量删除所有邮件
+   * 添加最大批次限制，防止运行时间过长
    */
-  private async batchDeleteAllMails(): Promise<number> {
+  private async batchDeleteAllMails(maxBatches: number = 10000): Promise<number> {
     const BATCH_SIZE = 100
     let totalDeleted = 0
+    let batchCount = 0
 
     while (true) {
       const batch = await this.ctx.database
@@ -230,6 +368,14 @@ class ApiRegistrar {
       })
 
       totalDeleted += batch.length
+      batchCount++
+
+      // 达到最大批次限制时停止
+      if (batchCount >= maxBatches) {
+        logger.warn('已达到最大批次限制 (%d 批)，停止删除', maxBatches)
+        break
+      }
+
       // 让出事件循环，避免阻塞
       await new Promise(resolve => setTimeout(resolve, 50))
     }

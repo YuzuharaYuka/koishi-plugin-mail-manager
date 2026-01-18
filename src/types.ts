@@ -25,6 +25,15 @@ export type { Config } from './config'
 export type MailAccountStatus = 'connected' | 'connecting' | 'disconnected' | 'error'
 
 /**
+ * 转发模式
+ *
+ * - `text`: 纯文本模式 - 将邮件内容转换为纯文本格式发送，可筛选元素
+ * - `image`: 图片模式 - 将邮件原始 HTML 内容渲染为图片，保持原格式
+ * - `hybrid`: 混合模式 - 摘要信息用文本，正文渲染为图片
+ */
+export type ForwardMode = 'text' | 'image' | 'hybrid'
+
+/**
  * 转发消息中包含的元素类型
  *
  * 用于定义转发消息的构成部分，如标题、发件人、正文等。
@@ -34,12 +43,14 @@ export type ForwardElementType =
   | 'from'         // 发件人信息
   | 'to'           // 收件人信息
   | 'date'         // 接收日期
-  | 'text'         // 纯文本正文
-  | 'html'         // HTML 正文（通常渲染为图片）
-  | 'markdown'     // Markdown 格式正文
+  | 'body'         // 邮件正文（自动选择最佳格式）
   | 'attachments'  // 附件列表
   | 'separator'    // 分隔线
   | 'custom'       // 自定义模板内容
+  // 以下类型保留用于向后兼容，已废弃
+  | 'text'         // @deprecated 使用 body + text 模式代替
+  | 'html'         // @deprecated 使用 body + image 模式代替
+  | 'markdown'     // @deprecated 使用 body + image 模式代替
 
 /**
  * 转发规则的匹配条件类型
@@ -55,6 +66,31 @@ export type ConditionType =
   | 'body_contains'    // 正文包含特定文本
   | 'body_regex'       // 正文匹配正则表达式
   | 'all'              // 匹配所有邮件（无条件）
+
+/**
+ * 规则匹配策略
+ *
+ * - `first-match`: 匹配第一个符合条件的规则后停止（默认）
+ * - `all-match`: 匹配所有符合条件的规则并依次执行
+ */
+export type RuleMatchStrategy = 'first-match' | 'all-match'
+
+/**
+ * 条件组合逻辑
+ *
+ * - `and`: 所有条件必须同时满足（默认）
+ * - `or`: 满足任一条件即可
+ */
+export type ConditionLogic = 'and' | 'or'
+
+/**
+ * 转发失败处理策略
+ *
+ * - `mark-partial`: 部分成功也标记为已转发（默认）
+ * - `require-all`: 所有目标成功才标记为已转发
+ * - `retry-failed`: 记录失败目标，后续可重试
+ */
+export type FailureStrategy = 'mark-partial' | 'require-all' | 'retry-failed'
 
 // ============================================================================
 // 2. 核心领域模型 (Domain Models)
@@ -212,6 +248,12 @@ export interface ForwardRule {
   enabled: boolean
 
   /**
+   * 规则优先级 (数值越小优先级越高)
+   * 默认为 100，用于控制规则匹配顺序
+   */
+  priority: number
+
+  /**
    * 关联的邮箱账号 ID
    *
    * - 指定 ID: 仅对该账号生效
@@ -220,9 +262,16 @@ export interface ForwardRule {
   accountId?: number
 
   /**
+   * 条件组合逻辑
+   * - `and`: 所有条件必须满足（默认）
+   * - `or`: 满足任一条件即可
+   */
+  conditionLogic: ConditionLogic
+
+  /**
    * 匹配条件列表
    *
-   * 通常所有条件需同时满足（AND 逻辑），或根据具体实现而定。
+   * 根据 conditionLogic 决定是 AND 还是 OR 逻辑
    */
   conditions: ForwardCondition[]
 
@@ -230,25 +279,85 @@ export interface ForwardRule {
   targets: ForwardTarget[]
 
   /**
-   * 转发内容构成
+   * 转发模式
+   * - `text`: 纯文本模式，按元素筛选发送文字消息
+   * - `image`: 图片模式，将邮件原始 HTML 渲染为图片
+   * - `hybrid`: 混合模式，摘要文本 + 正文图片
+   *
+   * 如未设置，默认为 `text` 以向后兼容。
+   */
+  forwardMode?: ForwardMode
+
+  /**
+   * 转发内容构成（仅在 text/hybrid 模式下使用）
    * 定义了转发消息中包含哪些元素以及它们的顺序。
    */
   elements: ForwardElement[]
 
   /**
+   * 正则内容提取配置（仅在 text 模式下使用）
+   * 用于从邮件正文中提取特定内容
+   */
+  regexConfig?: RegexConfig
+
+  /**
    * 自定义 CSS 样式
-   * 用于微调 HTML/Markdown 渲染效果。
+   * 用于 image/hybrid 模式下的 HTML 渲染。
    */
   customCss?: string
 
   /** 图片渲染配置 */
   renderConfig: RenderConfig
 
+  /**
+   * 转发失败处理策略
+   * 默认为 'mark-partial'
+   */
+  failureStrategy: FailureStrategy
+
+  /**
+   * 转发延迟（毫秒）
+   * 用于避免过快发送导致的限流问题
+   * 默认为 0（立即发送）
+   */
+  delayMs: number
+
+  /**
+   * 防止重复转发同一邮件
+   * 如果邮件已被此规则转发过，则跳过
+   * 默认为 true
+   */
+  skipForwarded: boolean
+
+  /**
+   * 失败重试次数
+   * 默认为 0（不重试）
+   */
+  retryCount: number
+
+  /**
+   * 重试间隔（毫秒）
+   * 默认为 5000
+   */
+  retryIntervalMs: number
+
   /** 创建时间 */
   createdAt: Date
 
   /** 更新时间 */
   updatedAt: Date
+}
+
+/**
+ * 正则内容提取配置
+ */
+export interface RegexConfig {
+  /** 正则表达式模式 */
+  pattern: string
+  /** 正则标志 (i, g, gi 等) */
+  flags?: string
+  /** 输出模板，使用 $1, $2 等引用捕获组 */
+  template?: string
 }
 
 // ============================================================================
@@ -390,6 +499,8 @@ export interface ForwardPreviewRequest {
   mailId: number
   /** 使用的规则 ID（可选，若不提供则使用默认或临时配置） */
   ruleId?: number
+  /** 临时覆盖的转发模式 */
+  forwardMode?: ForwardMode
   /** 临时覆盖的元素配置 */
   elements?: ForwardElement[]
   /** 临时覆盖的 CSS */
@@ -435,6 +546,36 @@ declare module 'koishi' {
   }
 }
 
+/** 规则测试结果 */
+export interface RuleTestResult {
+  /** 是否匹配成功 */
+  matched: boolean
+  /** 匹配成功的条件描述列表 */
+  matchedConditions: string[]
+  /** 匹配失败的条件描述列表 */
+  unmatchedConditions: string[]
+  /** 预览内容（仅在匹配成功时提供） */
+  previewContent?: ForwardPreviewResponse
+}
+
+/** 规则导出数据结构 */
+export interface RuleExport {
+  /** 导出格式版本 */
+  version: string
+  /** 导出时间 */
+  exportedAt: string
+  /** 规则列表 */
+  rules: Partial<ForwardRule>[]
+}
+
+/** 规则导入结果 */
+export interface RuleImportResult {
+  /** 成功导入的规则数量 */
+  imported: number
+  /** 跳过的规则数量（重复或无效） */
+  skipped: number
+}
+
 declare module '@koishijs/plugin-console' {
   interface Events {
     // --- 账号管理 ---
@@ -446,6 +587,7 @@ declare module '@koishijs/plugin-console' {
     'mail-manager/accounts/test'(id: number): Promise<ConnectionTestResult>
     'mail-manager/accounts/connect'(id: number): Promise<void>
     'mail-manager/accounts/disconnect'(id: number): Promise<void>
+    'mail-manager/accounts/sync'(id: number, days?: number): Promise<{ total: number; new: number; existing: number }>
 
     // --- 邮件管理 ---
     'mail-manager/mails/list'(query: MailListQuery): Promise<PaginatedResponse<StoredMail>>
@@ -453,6 +595,7 @@ declare module '@koishijs/plugin-console' {
     'mail-manager/mails/delete'(id: number): Promise<void>
     'mail-manager/mails/read'(id: number): Promise<void>
     'mail-manager/mails/forward'(mailId: number, ruleId?: number): Promise<void>
+    'mail-manager/mails/batch-delete'(accountId?: number, days?: number): Promise<{ deleted: number }>
 
     // --- 规则管理 ---
     'mail-manager/rules/list'(): Promise<ForwardRule[]>
@@ -460,6 +603,9 @@ declare module '@koishijs/plugin-console' {
     'mail-manager/rules/create'(data: Partial<ForwardRule>): Promise<ForwardRule>
     'mail-manager/rules/update'(id: number, data: Partial<ForwardRule>): Promise<ForwardRule>
     'mail-manager/rules/delete'(id: number): Promise<void>
+    'mail-manager/rules/test'(ruleId: number, mailId: number): Promise<RuleTestResult>
+    'mail-manager/rules/export'(): Promise<RuleExport>
+    'mail-manager/rules/import'(data: RuleExport): Promise<RuleImportResult>
 
     // --- 其他功能 ---
     'mail-manager/preview'(request: ForwardPreviewRequest): Promise<ForwardPreviewResponse>
@@ -471,6 +617,26 @@ declare module '@koishijs/plugin-console' {
       unreadCount: number
       ruleCount: number
       enabledRuleCount: number
+    }>
+
+    // --- 清理功能 ---
+    'mail-manager/cleanup/expired'(dryRun?: boolean): Promise<{ dryRun: boolean; count: number; cutoffDate: string }>
+    'mail-manager/cleanup/all'(confirm?: boolean): Promise<{ needConfirm: boolean; count: number }>
+
+    // --- 健康监控 ---
+    'mail-manager/health'(): Promise<{
+      status: 'healthy' | 'degraded'
+      timestamp: string
+      accounts: { total: number; connected: number; error: number; errorDetails: any[] }
+      memory: { heapUsed: number; heapTotal: number; rss: number; external: number }
+      uptime: number
+    }>
+    'mail-manager/metrics'(): Promise<{
+      timestamp: string
+      accounts: { total: number; byStatus: Record<string, number> }
+      mails: { total: number; last24h: number; forwardedLast24h: number }
+      rules: { total: number; enabled: number }
+      memory: { heapUsedMB: number; rssMB: number }
     }>
   }
 }

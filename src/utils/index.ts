@@ -5,3 +5,4 @@
 export * from './common'
 export * from './errors'
 export * from './dns'
+export * from './crypto'

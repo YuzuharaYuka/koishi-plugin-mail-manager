@@ -23,21 +23,50 @@
         <table class="ml-table">
           <thead>
             <tr>
-              <th>名称</th>
-              <th>描述</th>
-              <th>条件数</th>
-              <th>目标数</th>
-              <th>启用</th>
-              <th>操作</th>
+              <th class="col-name">名称</th>
+              <th class="col-mode">转发模式</th>
+              <th class="col-conditions">匹配条件</th>
+              <th class="col-targets">转发目标</th>
+              <th class="col-enabled">启用</th>
+              <th class="col-action">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="rule in rules" :key="rule.id">
-              <td data-label="名称">{{ rule.name }}</td>
-              <td data-label="描述">{{ rule.description || '-' }}</td>
-              <td data-label="条件数">{{ rule.conditions.length }}</td>
-              <td data-label="目标数">{{ rule.targets.length }}</td>
-              <td data-label="启用">
+              <td data-label="名称" class="col-name">
+                <div class="rule-name">{{ rule.name }}</div>
+                <div v-if="rule.description" class="rule-desc">{{ rule.description }}</div>
+              </td>
+              <td data-label="模式" class="col-mode">
+                <span class="mode-badge" :class="getModeBadgeClass(rule)">
+                  {{ getModeLabel(rule) }}
+                </span>
+              </td>
+              <td data-label="条件" class="col-conditions">
+                <div class="conditions-preview">
+                  <div
+                    v-for="(cond, index) in getConditionsSummary(rule)"
+                    :key="index"
+                    class="condition-tag"
+                  >
+                    {{ cond }}
+                  </div>
+                  <div v-if="rule.conditions.length > 2" class="condition-more">
+                    +{{ rule.conditions.length - 2 }}
+                  </div>
+                </div>
+              </td>
+              <td data-label="目标" class="col-targets">
+                <div class="targets-preview">
+                  <div class="target-summary">
+                    转发至 {{ rule.targets.length }} 个目标
+                  </div>
+                  <div class="target-examples">
+                    {{ getTargetsSummary(rule) }}
+                  </div>
+                </div>
+              </td>
+              <td data-label="启用" class="col-enabled">
                 <label class="ml-switch">
                   <input
                     type="checkbox"
@@ -47,13 +76,13 @@
                   <span class="slider"></span>
                 </label>
               </td>
-              <td>
+              <td data-label="操作" class="col-action">
                 <div class="action-btns">
                   <button class="ml-btn small" @click="openEditModal(rule)" title="编辑">
-                    <Icon name="edit" />
+                    <Icon name="edit-2" />
                   </button>
                   <button class="ml-btn small danger" @click="deleteRule(rule)" title="删除">
-                    <Icon name="delete" />
+                    <Icon name="trash-2" />
                   </button>
                 </div>
               </td>
@@ -64,241 +93,90 @@
     </div>
 
     <!-- 创建/编辑弹窗 -->
-    <div v-if="showModal" class="ml-modal-mask" @click.self="closeModal">
-      <div class="ml-modal rule-modal">
-        <div class="ml-modal-header">
-          <span class="ml-modal-title">{{ isEditing ? '编辑规则' : '添加规则' }}</span>
-          <button class="ml-modal-close" @click="closeModal"><Icon name="close" /></button>
-        </div>
-        <div class="ml-modal-body">
-          <!-- 基本信息 -->
-          <div class="section-title">基本信息</div>
-          <div class="ml-form-group">
-            <label class="ml-label">规则名称 <span class="required">*</span></label>
-            <input v-model="formData.name" class="ml-input" placeholder="为规则起一个名称" />
-          </div>
-          <div class="ml-form-group">
-            <label class="ml-label">描述</label>
-            <input v-model="formData.description" class="ml-input" placeholder="规则描述（可选）" />
-          </div>
-          <div class="ml-form-group">
-            <label class="ml-label">绑定账号</label>
-            <select v-model="formData.accountId" class="ml-select">
-              <option :value="undefined">所有账号</option>
-              <option v-for="account in accounts" :key="account.id" :value="account.id">
-                {{ account.name }}
-              </option>
-            </select>
-            <div class="ml-help">仅处理指定账号收到的邮件</div>
-          </div>
-
-          <div class="ml-divider"></div>
-
-          <!-- 匹配条件 -->
-          <div class="section-title">匹配条件</div>
-          <div class="ml-condition-editor">
-            <div class="condition-list">
-              <div v-for="(cond, idx) in formData.conditions" :key="idx" class="condition-item">
-                <select v-model="cond.type" class="ml-select condition-type">
-                  <option value="all">匹配所有</option>
-                  <option value="subject_contains">主题包含</option>
-                  <option value="subject_regex">主题正则</option>
-                  <option value="from_contains">发件人包含</option>
-                  <option value="from_regex">发件人正则</option>
-                  <option value="to_contains">收件人包含</option>
-                  <option value="body_contains">正文包含</option>
-                  <option value="body_regex">正文正则</option>
-                </select>
-                <input
-                  v-if="cond.type !== 'all'"
-                  v-model="cond.value"
-                  class="ml-input condition-value"
-                  placeholder="匹配值"
-                />
-                <label v-if="cond.type !== 'all'" class="condition-negate">
-                  <input type="checkbox" v-model="cond.negate" />
-                  取反
-                </label>
-                <button
-                  v-if="formData.conditions.length > 1"
-                  class="ml-btn small danger"
-                  @click="removeCondition(idx)"
-                  title="移除"
-                >
-                  <Icon name="close" />
-                </button>
-              </div>
-            </div>
-            <button class="ml-btn small" style="margin-top: 8px;" @click="addCondition">
-              <Icon name="add" /> 添加条件
-            </button>
-          </div>
-
-          <div class="ml-divider"></div>
-
-          <!-- 转发目标 -->
-          <div class="section-title">转发目标</div>
-          <div class="ml-target-selector">
-            <div class="target-list">
-              <div v-for="(target, idx) in formData.targets" :key="idx" class="target-item">
-                <div class="target-info">
-                  <select v-model="target.platform" class="ml-select" style="width: 120px;">
-                    <option v-for="p in availablePlatforms" :key="p" :value="p">{{ p }}</option>
-                  </select>
-                  <input
-                    v-model="target.selfId"
-                    class="ml-input"
-                    placeholder="Bot ID"
-                    style="width: 120px; margin-left: 8px;"
-                  />
-                  <input
-                    v-model="target.channelId"
-                    class="ml-input"
-                    placeholder="频道/群组 ID"
-                    style="flex: 1; margin-left: 8px;"
-                  />
-                </div>
-                <button class="ml-btn small danger" @click="removeTarget(idx)" title="移除"><Icon name="close" /></button>
-              </div>
-            </div>
-            <button class="ml-btn small" style="margin-top: 8px;" @click="addTarget">
-              <Icon name="add" /> 添加目标
-            </button>
-            <div class="ml-help">
-              频道 ID 格式：群组直接填 ID，私聊填 private:用户ID
-            </div>
-          </div>
-
-          <div class="ml-divider"></div>
-
-          <!-- 转发元素 -->
-          <div class="section-title">转发元素</div>
-          <div class="ml-element-selector">
-            <div class="element-list">
-              <div v-for="(elem, idx) in formData.elements" :key="idx" class="element-item">
-                <span class="element-handle">⋮⋮</span>
-                <label class="ml-switch element-switch">
-                  <input type="checkbox" v-model="elem.enabled" />
-                  <span class="slider"></span>
-                </label>
-                <div class="element-info">
-                  <span class="element-type">{{ elementTypeLabels[elem.type] }}</span>
-                  <input
-                    v-if="elem.type !== 'separator'"
-                    v-model="elem.label"
-                    class="ml-input element-label-input"
-                    placeholder="自定义标签（可选）"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="ml-divider"></div>
-
-          <!-- 自定义样式 -->
-          <div class="section-title">
-            自定义 CSS（用于 HTML/Markdown 渲染）
-            <button class="ml-btn small" style="margin-left: 8px;" @click="resetCss">
-              重置默认
-            </button>
-          </div>
-          <div class="ml-css-editor">
-            <div class="editor-container">
-              <textarea
-                v-model="formData.customCss"
-                placeholder="输入自定义 CSS 样式..."
-              ></textarea>
-            </div>
-          </div>
-        </div>
-        <div class="ml-modal-footer">
-          <button class="ml-btn" @click="closeModal">取消</button>
-          <button class="ml-btn primary" @click="saveRule" :disabled="saving">
-            {{ saving ? '保存中...' : '保存' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <RuleEditModal
+      v-model:visible="showModal"
+      :rule="editingRule"
+      :accounts="accounts"
+      :available-platforms="availablePlatforms"
+      @saved="handleSaved"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ruleApi, accountApi, commonApi } from '../api'
-import type { ForwardRule, MailAccount, ForwardCondition, ForwardTarget, ForwardElement } from '../types'
+import type { ForwardRule, MailAccount, ForwardMode } from '../types'
 import Icon from '../components/Icon.vue'
+import RuleEditModal from '../components/RuleEditModal.vue'
 
 const emit = defineEmits(['refresh'])
 
-const elementTypeLabels: Record<string, string> = {
-  subject: '主题',
-  from: '发件人',
-  to: '收件人',
-  date: '时间',
-  text: '纯文本内容',
-  html: 'HTML 渲染图片',
-  markdown: 'Markdown 渲染图片',
-  attachments: '附件列表',
-  separator: '分隔线',
-  custom: '自定义模板',
+// 模式标签映射
+const modeLabels: Record<string, string> = {
+  text: '文本',
+  image: '图片',
+  hybrid: '混合',
 }
-
-const defaultCss = `
-.mail-container {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  line-height: 1.6;
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.mail-header {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.mail-field {
-  margin: 4px 0;
-  font-size: 14px;
-}
-
-.mail-body {
-  color: #333;
-  font-size: 14px;
-}
-`.trim()
-
-const defaultElements: ForwardElement[] = [
-  { type: 'subject', enabled: true, label: '主题：', order: 1 },
-  { type: 'from', enabled: true, label: '发件人：', order: 2 },
-  { type: 'date', enabled: true, label: '时间：', order: 3 },
-  { type: 'separator', enabled: true, order: 4 },
-  { type: 'text', enabled: true, label: '', order: 5 },
-  { type: 'html', enabled: false, label: '', order: 6 },
-  { type: 'markdown', enabled: false, label: '', order: 7 },
-  { type: 'attachments', enabled: true, label: '', order: 8 },
-]
 
 const loading = ref(false)
-const saving = ref(false)
 const rules = ref<ForwardRule[]>([])
 const accounts = ref<MailAccount[]>([])
 const availablePlatforms = ref<string[]>(['onebot', 'discord', 'telegram', 'kook'])
 const showModal = ref(false)
-const isEditing = ref(false)
-const editingId = ref<number | null>(null)
+const editingRule = ref<ForwardRule | null>(null)
 
-const formData = reactive({
-  name: '',
-  description: '',
-  enabled: true,
-  accountId: undefined as number | undefined,
-  conditions: [] as ForwardCondition[],
-  targets: [] as ForwardTarget[],
-  elements: [] as ForwardElement[],
-  customCss: '',
-})
+const getModeLabel = (rule: ForwardRule) => {
+  const mode = detectForwardMode(rule)
+  return modeLabels[mode] || '文本'
+}
+
+const getModeBadgeClass = (rule: ForwardRule) => {
+  const mode = detectForwardMode(rule)
+  return `mode-${mode}`
+}
+
+// 检测转发模式（向后兼容旧规则）
+const detectForwardMode = (rule: ForwardRule): ForwardMode => {
+  if (rule.forwardMode) {
+    return rule.forwardMode
+  }
+  const hasHtmlOrMd = rule.elements.some(
+    e => e.enabled && (e.type === 'html' || e.type === 'markdown')
+  )
+  return hasHtmlOrMd ? 'image' : 'text'
+}
+
+const conditionTypeMap: Record<string, string> = {
+  all: '所有邮件',
+  subject_contains: '主题包含',
+  subject_regex: '主题匹配',
+  from_contains: '发件人包含',
+  from_regex: '发件匹配',
+  to_contains: '收件人包含',
+  body_contains: '正文包含',
+  body_regex: '正文匹配',
+}
+
+const getConditionsSummary = (rule: ForwardRule): string[] => {
+  if (rule.conditions.length === 0) return ['无条件']
+  return rule.conditions.slice(0, 2).map(c => {
+    if (c.type === 'all') return '所有邮件'
+    const label = conditionTypeMap[c.type] || c.type
+    const val = c.value.length > 10 ? c.value.slice(0, 10) + '...' : c.value
+    return `${c.negate ? '不' : ''}${label} "${val}"`
+  })
+}
+
+const getTargetsSummary = (rule: ForwardRule): string => {
+  if (rule.targets.length === 0) return '无目标'
+  const first = rule.targets[0]
+  const platform = first.platform
+  const target = first.channelId.startsWith('private:')
+    ? `用户 ${first.channelId.slice(8)}`
+    : `群/频道 ${first.channelId}`
+  return `${platform}: ${target}${rule.targets.length > 1 ? ' 等...' : ''}`
+}
 
 const loadRules = async () => {
   loading.value = true
@@ -332,118 +210,23 @@ const loadTargets = async () => {
 }
 
 const openCreateModal = () => {
-  isEditing.value = false
-  editingId.value = null
-  Object.assign(formData, {
-    name: '',
-    description: '',
-    enabled: true,
-    accountId: undefined,
-    conditions: [{ type: 'all', value: '', negate: false }],
-    targets: [],
-    elements: JSON.parse(JSON.stringify(defaultElements)),
-    customCss: defaultCss,
-  })
+  editingRule.value = null
   showModal.value = true
 }
 
 const openEditModal = (rule: ForwardRule) => {
-  isEditing.value = true
-  editingId.value = rule.id
-  Object.assign(formData, {
-    name: rule.name,
-    description: rule.description || '',
-    enabled: rule.enabled,
-    accountId: rule.accountId,
-    conditions: rule.conditions.length > 0
-      ? JSON.parse(JSON.stringify(rule.conditions))
-      : [{ type: 'all', value: '', negate: false }],
-    targets: JSON.parse(JSON.stringify(rule.targets)),
-    elements: rule.elements.length > 0
-      ? JSON.parse(JSON.stringify(rule.elements))
-      : JSON.parse(JSON.stringify(defaultElements)),
-    customCss: rule.customCss || defaultCss,
-  })
+  editingRule.value = rule
   showModal.value = true
 }
 
-const closeModal = () => {
-  showModal.value = false
-}
-
-const addCondition = () => {
-  formData.conditions.push({ type: 'subject_contains', value: '', negate: false })
-}
-
-const removeCondition = (idx: number) => {
-  formData.conditions.splice(idx, 1)
-}
-
-const addTarget = () => {
-  formData.targets.push({ platform: 'onebot', selfId: '', channelId: '' })
-}
-
-const removeTarget = (idx: number) => {
-  formData.targets.splice(idx, 1)
-}
-
-const resetCss = () => {
-  formData.customCss = defaultCss
-}
-
-const saveRule = async () => {
-  if (!formData.name) {
-    alert('请填写规则名称')
-    return
-  }
-
-  if (formData.targets.length === 0) {
-    alert('请至少添加一个转发目标')
-    return
-  }
-
-  saving.value = true
-  try {
-    const data = {
-      name: formData.name,
-      description: formData.description || undefined,
-      enabled: formData.enabled,
-      accountId: formData.accountId,
-      conditions: formData.conditions,
-      targets: formData.targets,
-      elements: formData.elements,
-      customCss: formData.customCss,
-      renderConfig: {
-        imageWidth: 800,
-        backgroundColor: '#ffffff',
-        textColor: '#333333',
-        fontSize: 14,
-        padding: 20,
-        showBorder: true,
-        borderColor: '#e0e0e0',
-      },
-    }
-
-    if (isEditing.value && editingId.value) {
-      await ruleApi.update(editingId.value, data)
-    } else {
-      await ruleApi.create(data)
-    }
-    closeModal()
-    await loadRules()
-    emit('refresh')
-  } catch (e) {
-    console.error('Failed to save rule:', e)
-    alert(`保存失败: ${(e as Error).message}`)
-  } finally {
-    saving.value = false
-  }
+const handleSaved = async () => {
+  await loadRules()
+  emit('refresh')
 }
 
 const toggleEnabled = async (rule: ForwardRule) => {
   try {
     await ruleApi.update(rule.id, { enabled: rule.enabled })
-    // await loadRules()
   } catch (e) {
     rule.enabled = !rule.enabled
     console.error('Failed to toggle enabled:', e)
@@ -479,15 +262,53 @@ onMounted(() => {
   gap: 8px;
 }
 
+.rule-name {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.rule-desc {
+  font-size: 12px;
+  color: var(--ml-text-secondary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.mode-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.mode-badge.mode-text {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.mode-badge.mode-image {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.mode-badge.mode-hybrid {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
 .action-btns {
-  display: flex;
+  display: inline-flex;
   gap: 4px;
   justify-content: center;
 
   .ml-btn.small {
     min-width: 32px;
     height: 32px;
-    padding: 6px 12px;
+    padding: 6px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -498,114 +319,65 @@ onMounted(() => {
   }
 }
 
-.rule-modal {
-  width: 100%;
-  max-width: 700px;
-  max-height: 85vh;
-}
+/* 列表列宽优化 - 使用flex布局 */
+.rule-table-wrapper {
+  overflow-x: auto;
 
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ml-text);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-}
-
-.condition-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-
-  .condition-type {
-    width: 140px;
-    flex-shrink: 0;
-  }
-
-  .condition-value {
-    flex: 1;
-  }
-
-  .condition-negate {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 13px;
-    color: var(--ml-text-secondary);
-    flex-shrink: 0;
+  .ml-table {
+    min-width: 700px;
+    table-layout: fixed;
   }
 }
 
-.target-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+.col-name { width: 18%; min-width: 120px; }
+.col-mode { width: 10%; min-width: 70px; text-align: center; }
+.col-conditions { width: 28%; min-width: 160px; }
+.col-targets { width: 24%; min-width: 140px; }
+.col-enabled { width: 10%; min-width: 60px; text-align: center; }
+.col-action { width: 10%; min-width: 90px; text-align: center; }
 
-  .target-info {
-    flex: 1;
-    display: flex;
-    align-items: center;
-  }
+/* 条件预览样式 */
+.conditions-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.element-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
+.condition-tag {
+  font-size: 12px;
   background: var(--ml-hover);
-  border-radius: 6px;
-  margin-bottom: 8px;
-
-  .element-handle {
-    color: var(--ml-text-secondary);
-    cursor: grab;
-  }
-
-  .element-info {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-
-    .element-type {
-      width: 140px;
-      flex-shrink: 0;
-    }
-
-    .element-label-input {
-      flex: 1;
-      padding: 4px 8px;
-      font-size: 13px;
-    }
-  }
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--ml-text-secondary);
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.ml-css-editor {
-  .editor-container {
-    border: 1px solid var(--ml-border);
-    border-radius: 6px;
-    overflow: hidden;
-
-    textarea {
-      width: 100%;
-      min-height: 150px;
-      padding: 12px;
-      border: none;
-      background: #1e1e1e;
-      color: #d4d4d4;
-      font-family: 'Consolas', 'Monaco', monospace;
-      font-size: 13px;
-      line-height: 1.5;
-      resize: vertical;
-
-      &:focus {
-        outline: none;
-      }
-    }
-  }
+.condition-more {
+  font-size: 12px;
+  color: var(--ml-text-secondary);
+  align-self: center;
 }
+
+/* 目标预览样式 */
+.targets-preview {
+  font-size: 13px;
+}
+
+.target-summary {
+  color: var(--ml-text);
+  margin-bottom: 2px;
+}
+
+.target-examples {
+  font-size: 12px;
+  color: var(--ml-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 </style>
+

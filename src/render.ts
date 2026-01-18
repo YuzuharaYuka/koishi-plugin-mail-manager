@@ -1,4 +1,5 @@
 import { Context, h, Logger } from 'koishi'
+import type { } from '@koishijs/plugin-puppeteer'
 import type {
   StoredMail,
   ForwardRule,
@@ -7,10 +8,13 @@ import type {
   ForwardPreviewResponse,
   MailAddress,
   MailAttachment,
+  ForwardMode,
+  RegexConfig,
 } from './types'
 import { DEFAULT_CSS } from './styles'
+import { htmlToImage } from './html2image'
 
-const logger = new Logger('mail-listener/render')
+const logger = new Logger('mail-manager/render')
 
 /**
  * Default configuration for rendering.
@@ -20,20 +24,29 @@ export const DEFAULT_RENDER_CONFIG: RenderConfig = {
   backgroundColor: '#ffffff',
   textColor: '#333333',
   fontSize: 14,
-  padding: 20,
+  padding: 0, // 移除白边
   showBorder: true,
   borderColor: '#e0e0e0',
 }
 
 /**
- * Default elements to include in a forwarded message.
+ * 默认转发元素配置（用于 text 和 hybrid 模式）
  */
 export const DEFAULT_FORWARD_ELEMENTS: ForwardElement[] = [
-  { type: 'subject', enabled: true, label: '📧 主题：', order: 1 },
-  { type: 'from', enabled: true, label: '👤 发件人：', order: 2 },
-  { type: 'date', enabled: true, label: '📅 时间：', order: 3 },
+  { type: 'subject', enabled: true, label: '主题：', order: 1 },
+  { type: 'from', enabled: true, label: '发件人：', order: 2 },
+  { type: 'date', enabled: true, label: '时间：', order: 3 },
   { type: 'separator', enabled: true, order: 4 },
-  { type: 'text', enabled: true, label: '', order: 5 },
+  { type: 'body', enabled: true, label: '', order: 5 },
+]
+
+/**
+ * 摘要元素配置（用于 hybrid 模式的文字部分）
+ */
+export const SUMMARY_ELEMENTS: ForwardElement[] = [
+  { type: 'subject', enabled: true, label: '主题：', order: 1 },
+  { type: 'from', enabled: true, label: '发件人：', order: 2 },
+  { type: 'date', enabled: true, label: '时间：', order: 3 },
 ]
 
 /**
@@ -90,15 +103,21 @@ class MailFormatter {
 }
 
 /**
- * Handles the generation of text previews.
+ * 文本生成器 - 用于纯文本模式
  */
 class TextGenerator {
-  static generate(mail: StoredMail, elements: ForwardElement[]): string {
+  /**
+   * 生成纯文本格式的邮件摘要
+   * @param mail 邮件数据
+   * @param elements 元素配置
+   * @param regexConfig 可选的正则提取配置
+   */
+  static generate(mail: StoredMail, elements: ForwardElement[], regexConfig?: RegexConfig): string {
     const sortedElements = this.sortElements(elements)
     const lines: string[] = []
 
     for (const element of sortedElements) {
-      const content = this.generateElementContent(element, mail)
+      const content = this.generateElementContent(element, mail, regexConfig)
       if (content) {
         lines.push(content)
       }
@@ -107,13 +126,45 @@ class TextGenerator {
     return lines.join('\n')
   }
 
+  /**
+   * 使用正则表达式提取文本内容
+   */
+  static extractWithRegex(text: string, regexConfig: RegexConfig): string | null {
+    if (!regexConfig.pattern || !text) return null
+
+    try {
+      const regex = new RegExp(regexConfig.pattern, regexConfig.flags || '')
+      const match = text.match(regex)
+
+      if (!match) return null
+
+      // 如果提供了模板，使用模板替换捕获组
+      if (regexConfig.template) {
+        let result = regexConfig.template
+        // 替换 $0 或 $& 为完整匹配
+        result = result.replace(/\$0|\$&/g, match[0])
+        // 替换 $1, $2, ... 为捕获组
+        for (let i = 1; i < match.length; i++) {
+          result = result.replace(new RegExp(`\\$${i}`, 'g'), match[i] || '')
+        }
+        return result
+      }
+
+      // 没有模板时，返回第一个捕获组或完整匹配
+      return match[1] || match[0]
+    } catch (e) {
+      logger.warn(`Invalid regex pattern: ${regexConfig.pattern}`, e)
+      return null
+    }
+  }
+
   private static sortElements(elements: ForwardElement[]): ForwardElement[] {
     return [...elements]
       .filter(e => e.enabled)
       .sort((a, b) => a.order - b.order)
   }
 
-  private static generateElementContent(element: ForwardElement, mail: StoredMail): string | null {
+  private static generateElementContent(element: ForwardElement, mail: StoredMail, regexConfig?: RegexConfig): string | null {
     const label = element.label || ''
 
     switch (element.type) {
@@ -127,14 +178,23 @@ class TextGenerator {
         return `${label || '时间：'}${MailFormatter.formatDate(mail.receivedAt)}`
       case 'separator':
         return '─'.repeat(30)
-      case 'text':
+      case 'body':
+      case 'text': // 向后兼容
+        // 如果有正则配置，尝试提取内容
+        if (regexConfig && regexConfig.pattern && mail.textContent) {
+          const extracted = TextGenerator.extractWithRegex(mail.textContent, regexConfig)
+          if (extracted) {
+            return `\n${extracted}`
+          }
+          // 正则未匹配到，返回完整内容
+        }
         return mail.textContent ? `\n${mail.textContent.trim()}` : null
       case 'attachments':
         if (mail.attachments.length === 0) return null
         const attachmentLines = mail.attachments.map(
-          att => `  • ${att.filename} (${MailFormatter.formatSize(att.size)})`
+          att => `  - ${att.filename} (${MailFormatter.formatSize(att.size)})`
         )
-        return `\n📎 附件 (${mail.attachments.length})：\n${attachmentLines.join('\n')}`
+        return `\n附件 (${mail.attachments.length})：\n${attachmentLines.join('\n')}`
       case 'custom':
         return element.template ? MailFormatter.applyTemplate(element.template, mail) : null
       default:
@@ -144,9 +204,43 @@ class TextGenerator {
 }
 
 /**
- * Handles the generation of HTML previews.
+ * HTML 生成器 - 用于图片渲染
  */
 class HtmlGenerator {
+  /**
+   * 生成用于渲染的 HTML（保持邮件原始格式）
+   * 这是 image 模式使用的方法
+   */
+  static generateOriginalHtml(mail: StoredMail, customCss?: string): string {
+    let bodyHtml = ''
+
+    // 优先使用 HTML 内容
+    if (mail.htmlContent) {
+      bodyHtml = this.processHtmlContent(mail)
+    } else if (mail.textContent) {
+      // 纯文本邮件：将换行转换为 <br>，保持格式
+      bodyHtml = `<pre style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;">${MailFormatter.escapeHtml(mail.textContent)}</pre>`
+    }
+
+    const css = customCss || DEFAULT_CSS
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>${css}</style>
+</head>
+<body>
+  <div class="mail-container">
+    <div class="mail-body">${bodyHtml}</div>
+  </div>
+</body>
+</html>`
+  }
+
+  /**
+   * 生成带元素选择的 HTML（用于预览或 hybrid 模式）
+   */
   static generate(mail: StoredMail, elements: ForwardElement[], customCss?: string): string {
     const sortedElements = this.sortElements(elements)
     const htmlParts: string[] = []
@@ -195,16 +289,17 @@ class HtmlGenerator {
         return this.createFieldHtml(label || '时间：', MailFormatter.formatDate(mail.receivedAt))
       case 'separator':
         return '<div class="mail-separator"></div>'
-      case 'text':
+      case 'body':
+      case 'html': // 向后兼容
+        return this.processHtmlContentForBody(mail)
+      case 'text': // 向后兼容
         return mail.textContent
-          ? `<div class="mail-body"><pre>${escape(mail.textContent)}</pre></div>`
+          ? `<div class="mail-body"><pre style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;">${escape(mail.textContent)}</pre></div>`
           : null
-      case 'html':
-        return this.processHtmlContent(mail)
       case 'markdown':
-        // TODO: Implement Markdown rendering
+        // Markdown 渲染（简单处理）
         return mail.textContent
-          ? `<div class="mail-body"><pre>${escape(mail.textContent)}</pre></div>`
+          ? `<div class="mail-body"><pre style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;">${escape(mail.textContent)}</pre></div>`
           : null
       case 'attachments':
         return this.generateAttachmentsHtml(mail.attachments)
@@ -222,13 +317,30 @@ class HtmlGenerator {
     </div>`
   }
 
-  private static processHtmlContent(mail: StoredMail): string | null {
+  private static processHtmlContent(mail: StoredMail): string {
     if (mail.htmlContent) {
       let html = mail.htmlContent
       // Replace CID images with Base64 data
       for (const att of mail.attachments) {
         if (att.cid && att.content) {
-          // Escape special regex characters in CID
+          const escapedCid = att.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          html = html.replace(
+            new RegExp(`cid:${escapedCid}`, 'g'),
+            `data:${att.contentType};base64,${att.content}`
+          )
+        }
+      }
+      return html
+    }
+    return ''
+  }
+
+  private static processHtmlContentForBody(mail: StoredMail): string | null {
+    if (mail.htmlContent) {
+      let html = mail.htmlContent
+      // Replace CID images with Base64 data
+      for (const att of mail.attachments) {
+        if (att.cid && att.content) {
           const escapedCid = att.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
           html = html.replace(
             new RegExp(`cid:${escapedCid}`, 'g'),
@@ -238,7 +350,7 @@ class HtmlGenerator {
       }
       return `<div class="mail-body">${html}</div>`
     } else if (mail.textContent) {
-      return `<div class="mail-body"><pre>${MailFormatter.escapeHtml(mail.textContent)}</pre></div>`
+      return `<div class="mail-body"><pre style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;">${MailFormatter.escapeHtml(mail.textContent)}</pre></div>`
     }
     return null
   }
@@ -248,7 +360,7 @@ class HtmlGenerator {
 
     const items = attachments.map(att =>
       `<div class="mail-attachment">
-        <span class="mail-attachment-icon">📎</span>
+        <span class="mail-attachment-icon">&#128206;</span>
         ${MailFormatter.escapeHtml(att.filename)} (${MailFormatter.formatSize(att.size)})
       </div>`
     ).join('')
@@ -258,76 +370,37 @@ class HtmlGenerator {
 }
 
 /**
- * Handles rendering HTML to images using Puppeteer.
+ * 图片渲染器
  */
 class ImageRenderer {
   constructor(private ctx: Context) {}
 
   async render(html: string, config: RenderConfig = DEFAULT_RENDER_CONFIG): Promise<string | undefined> {
-    // Safe access to puppeteer service
-    const puppeteer = this.ctx.get('puppeteer')
-    if (!puppeteer) {
-      logger.warn('Puppeteer service not available, skipping image render')
+    // 检查 puppeteer 服务是否可用
+    if (!this.ctx.puppeteer) {
+      logger.warn('puppeteer 服务不可用，无法渲染图片。请安装 koishi-plugin-puppeteer')
       return undefined
     }
 
-    let page: any
     try {
-      page = await puppeteer.page()
-
-      // Set initial viewport
-      await page.setViewport({
+      const buffer = await htmlToImage(this.ctx, html, {
         width: config.imageWidth,
-        height: 600,
-        deviceScaleFactor: 2,
+        backgroundColor: config.backgroundColor,
+        padding: config.padding,
+        format: 'png',
+        waitTime: 3000, // 等待 3 秒以确保图片加载
       })
-
-      // Load HTML content
-      // Using 'networkidle0' can be slow if there are external resources.
-      // 'domcontentloaded' is faster but might miss some styles/images.
-      // We use a timeout to prevent hanging.
-      await page.setContent(html, {
-        waitUntil: 'networkidle0',
-        timeout: 30000
-      })
-
-      // Calculate content height
-      const bodyHandle = await page.$('body')
-      const boundingBox = await bodyHandle?.boundingBox()
-      const contentHeight = boundingBox?.height || 600
-
-      // Limit max height to prevent huge images
-      const height = Math.min(Math.ceil(contentHeight) + config.padding * 2, 5000)
-
-      // Resize viewport to fit content
-      await page.setViewport({
-        width: config.imageWidth,
-        height: height,
-        deviceScaleFactor: 2,
-      })
-
-      // Take screenshot
-      const screenshot = await page.screenshot({
-        type: 'png',
-        encoding: 'base64',
-        fullPage: true,
-      })
-
-      return screenshot as string
+      return buffer.toString('base64')
     } catch (error) {
       logger.error('Failed to render image: %s', error)
       return undefined
-    } finally {
-      if (page) {
-        await page.close().catch((err: Error) => logger.warn('Failed to close page: %s', err))
-      }
     }
   }
 }
 
 /**
- * Main class for rendering mails.
- * Orchestrates text, HTML, and image generation.
+ * 邮件渲染器主类
+ * 根据不同模式生成转发内容
  */
 export class MailRenderer {
   private imageRenderer: ImageRenderer
@@ -337,26 +410,64 @@ export class MailRenderer {
   }
 
   /**
-   * Generates a complete preview (text, HTML, and optionally image) for a mail.
+   * 检测转发模式
+   * 处理向后兼容：旧规则可能没有 forwardMode 字段
+   */
+  private detectForwardMode(rule: ForwardRule): ForwardMode {
+    // 如果明确设置了 forwardMode，直接使用
+    if (rule.forwardMode) {
+      return rule.forwardMode
+    }
+
+    // 向后兼容：检查旧版元素配置
+    const hasHtmlOrMd = rule.elements.some(
+      e => e.enabled && (e.type === 'html' || e.type === 'markdown')
+    )
+
+    if (hasHtmlOrMd) {
+      return 'image' // 旧配置中启用了 html/markdown，使用图片模式
+    }
+
+    return 'text' // 默认使用文本模式
+  }
+
+  /**
+   * 生成预览内容
    */
   async generatePreview(
     mail: StoredMail,
     elements: ForwardElement[],
     customCss?: string,
-    renderConfig?: Partial<RenderConfig>
+    renderConfig?: Partial<RenderConfig>,
+    forwardMode?: ForwardMode
   ): Promise<ForwardPreviewResponse> {
     const config = { ...DEFAULT_RENDER_CONFIG, ...renderConfig }
+    const mode = forwardMode || 'text'
 
-    const textPreview = TextGenerator.generate(mail, elements)
-    const htmlPreview = HtmlGenerator.generate(mail, elements, customCss)
-
+    let textPreview = ''
+    let htmlPreview = ''
     let imagePreview: string | undefined
 
-    // Check if image rendering is required (HTML or Markdown elements present)
-    const requiresImage = elements.some(e => e.enabled && (e.type === 'html' || e.type === 'markdown'))
+    switch (mode) {
+      case 'text':
+        // 纯文本模式：只生成文本
+        textPreview = TextGenerator.generate(mail, elements)
+        htmlPreview = HtmlGenerator.generate(mail, elements, customCss)
+        break
 
-    if (requiresImage) {
-      imagePreview = await this.imageRenderer.render(htmlPreview, config)
+      case 'image':
+        // 图片模式：渲染原始邮件 HTML 为图片
+        htmlPreview = HtmlGenerator.generateOriginalHtml(mail, customCss)
+        textPreview = `[邮件图片] ${mail.subject}`
+        imagePreview = await this.imageRenderer.render(htmlPreview, config)
+        break
+
+      case 'hybrid':
+        // 混合模式：文字摘要 + 正文图片
+        textPreview = TextGenerator.generate(mail, elements.filter(e => e.type !== 'body' && e.type !== 'text' && e.type !== 'html'))
+        htmlPreview = HtmlGenerator.generateOriginalHtml(mail, customCss)
+        imagePreview = await this.imageRenderer.render(htmlPreview, config)
+        break
     }
 
     return {
@@ -367,42 +478,75 @@ export class MailRenderer {
   }
 
   /**
-   * Generates Koishi message elements for forwarding.
-   *
-   * Note: This method is async to allow for potential image rendering.
+   * 生成用于转发的 Koishi 消息元素
    */
   async generateForwardElements(
     mail: StoredMail,
     rule: ForwardRule
   ): Promise<h[]> {
     const elements = rule.elements.length > 0 ? rule.elements : DEFAULT_FORWARD_ELEMENTS
+    const mode = this.detectForwardMode(rule)
     const result: h[] = []
 
-    // Check if we need to render the mail body as an image
-    const requiresImage = elements.some(e => e.enabled && (e.type === 'html' || e.type === 'markdown'))
+    // 从规则中提取正则配置
+    const regexConfig: RegexConfig | undefined = (rule as any).regexConfig
 
-    if (requiresImage) {
-      // Generate HTML and render to image
-      const html = HtmlGenerator.generate(mail, elements, rule.customCss)
-      const imageBase64 = await this.imageRenderer.render(html, rule.renderConfig)
+    logger.debug(`Generating forward elements for mail "${mail.subject}" with mode: ${mode}`)
 
-      if (imageBase64) {
-        result.push(h.image(`data:image/png;base64,${imageBase64}`))
-      } else {
-        // Fallback to text if image rendering fails
-        result.push(h.text(TextGenerator.generate(mail, elements)))
-      }
-    } else {
-      // Text-only mode
-      result.push(h.text(TextGenerator.generate(mail, elements)))
+    switch (mode) {
+      case 'text':
+        // 纯文本模式：按元素配置生成文本消息，支持正则提取
+        result.push(h.text(TextGenerator.generate(mail, elements, regexConfig)))
+        break
+
+      case 'image':
+        // 图片模式：将邮件原始内容渲染为图片
+        const imageHtml = HtmlGenerator.generateOriginalHtml(mail, rule.customCss)
+        const imageBase64 = await this.imageRenderer.render(imageHtml, rule.renderConfig)
+
+        if (imageBase64) {
+          result.push(h.image(`data:image/png;base64,${imageBase64}`))
+        } else {
+          // 图片渲染失败时回退到文本
+          result.push(h.text('[!] 图片渲染失败，以下为纯文本内容：\n\n'))
+          result.push(h.text(TextGenerator.generate(mail, DEFAULT_FORWARD_ELEMENTS)))
+        }
+        break
+
+      case 'hybrid':
+        // 混合模式：先发送文字摘要，再发送正文图片
+        // 筛选出摘要元素（排除正文相关）
+        const summaryElements = elements.filter(
+          e => e.enabled && !['body', 'text', 'html', 'markdown'].includes(e.type)
+        )
+
+        if (summaryElements.length > 0) {
+          result.push(h.text(TextGenerator.generate(mail, summaryElements)))
+        }
+
+        // 渲染正文为图片
+        const bodyHtml = HtmlGenerator.generateOriginalHtml(mail, rule.customCss)
+        const bodyImageBase64 = await this.imageRenderer.render(bodyHtml, rule.renderConfig)
+
+        if (bodyImageBase64) {
+          result.push(h.image(`data:image/png;base64,${bodyImageBase64}`))
+        } else {
+          // 图片渲染失败，发送纯文本正文
+          if (mail.textContent) {
+            result.push(h.text('\n' + mail.textContent.trim()))
+          }
+        }
+        break
     }
 
-    // Append attachments (images only)
-    // Note: Non-image attachments are listed in the text summary but not sent as files here
-    // to avoid spamming or file size limits.
-    for (const att of mail.attachments) {
-      if (att.content && att.contentType.startsWith('image/')) {
-        result.push(h.image(`data:${att.contentType};base64,${att.content}`))
+    // 附加图片附件（所有模式都支持）
+    const shouldIncludeAttachments = elements.some(e => e.enabled && e.type === 'attachments')
+    if (shouldIncludeAttachments || mode === 'image') {
+      for (const att of mail.attachments) {
+        if (att.content && att.contentType.startsWith('image/') && !att.cid) {
+          // 只附加非内嵌的图片附件
+          result.push(h.image(`data:${att.contentType};base64,${att.content}`))
+        }
       }
     }
 

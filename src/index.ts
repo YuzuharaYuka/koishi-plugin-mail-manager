@@ -10,11 +10,13 @@ import { createLogger, setGlobalLogger } from './logger'
 import { Config } from './config'
 import { registerCommands } from './commands'
 import { scheduleAutoCleanup } from './cleanup'
+import { initPasswordManager } from './utils/crypto'
 
 export const name = 'mail-manager'
 
 export const inject = {
   required: ['database', 'console', 'server'],
+  optional: ['puppeteer'],
 }
 
 export const usage = `
@@ -50,9 +52,9 @@ export const usage = `
 ### HTML 转图片功能
 
 插件支持将邮件 HTML 内容转换为图片，方便转发到不支持富文本的平台：
-- 使用 @napi-rs/canvas 原生渲染，无需外部依赖
-- 在转发规则中选择「HTML 图片」渲染模式
-- 自动处理邮件样式，优化显示效果
+- 需要安装 \`koishi-plugin-puppeteer\` 插件
+- 使用真实浏览器渲染，完整保留邮件原始样式
+- 在转发规则中选择「图片模式」或「混合模式」
 
 ### 配置说明
 
@@ -74,25 +76,28 @@ export function apply(ctx: Context, config: Config) {
   setGlobalLogger(logger)
   setDebugMode(config.debug)
 
-  // 2. Setup Database
+  // 2. Initialize Password Encryption
+  initPasswordManager(config.encryptionKey)
+
+  // 3. Setup Database
   extendDatabase(ctx)
 
-  // 3. Initialize Core Logic
+  // 4. Initialize Core Logic
   // We start this asynchronously to not block the plugin loading
   initCore(ctx, config).catch(err => {
     logger.error('', `Initialization failed: ${err.message}`)
   })
 
-  // 4. Register Console API & UI
+  // 5. Register Console API & UI
   registerConsoleApi(ctx, config)
   ctx.console.addEntry({
     dev: resolve(__dirname, '../client/index.ts'),
     prod: resolve(__dirname, '../dist'),
   })
 
-  // 5. Register Commands
+  // 6. Register Commands
   registerCommands(ctx, config)
 
-  // 6. Schedule Background Tasks
+  // 7. Schedule Background Tasks
   scheduleAutoCleanup(ctx, config)
 }

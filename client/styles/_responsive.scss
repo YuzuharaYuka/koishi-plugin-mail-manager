@@ -13,6 +13,10 @@
     .ml-title {
       justify-content: space-between;
 
+      h1 {
+        font-size: 18px;
+      }
+
       .ml-stats {
         display: none; // 移动端隐藏统计信息
       }
@@ -21,10 +25,13 @@
     .ml-nav {
       overflow-x: auto;
       padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
 
       .nav-btn {
         white-space: nowrap;
         flex-shrink: 0;
+        padding: 6px 12px;
+        font-size: 13px;
       }
     }
   }
@@ -56,7 +63,7 @@
       border: 1px solid var(--ml-border);
       border-radius: 8px;
       padding: 12px;
-      background: var(--ml-bg);
+      background: var(--ml-bg-container);
 
       &:last-child {
         margin-bottom: 0;
@@ -67,24 +74,25 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 6px 0;
+      padding: 8px 0;
       border-bottom: none;
       text-align: right;
+      gap: 12px;
 
       &::before {
         content: attr(data-label);
         font-weight: 500;
         color: var(--ml-text-secondary);
-        margin-right: 12px;
         text-align: left;
         flex-shrink: 0;
+        font-size: 13px;
       }
 
       // 操作列特殊处理
       &:last-child {
         margin-top: 8px;
         padding-top: 8px;
-        border-top: 1px solid var(--ml-border);
+        border-top: 1px solid var(--ml-border-light);
         justify-content: flex-end;
 
         &::before {

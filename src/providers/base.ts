@@ -192,6 +192,12 @@ export class GenericMailProvider extends MailProviderAdapter {
     // 代理配置
     if (proxyUrl) {
       config.proxy = proxyUrl
+
+      // 使用 HTTP/HTTPS 代理时，必须使用域名而非 IP
+      // 这样代理才能正确建立 CONNECT 隧道
+      if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
+        config.host = account.imapHost
+      }
     }
 
     return config

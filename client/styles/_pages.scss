@@ -8,9 +8,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--ml-spacing);
-  flex: 1; // 使用 flex 而不是 height
-  min-height: 0; // 关键：允许 flex 子项缩小
-  overflow: hidden; // 防止外部容器滚动
   padding: 4px; // 给阴影留出空间
 
   // 统计卡片优化
@@ -107,39 +104,17 @@
     }
   }
 
-  // 账号视图的卡片优化
+  // 账号视图的卡片 - 保持简单
   .ml-card {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    padding: 0; // 移除padding，避免干扰flex布局
-
-    &:first-child {
-      flex-shrink: 0; // 工具栏不压缩
-      padding: var(--ml-spacing-lg); // 工具栏保持padding
-    }
-
-    &:last-child {
-      flex: 1; // 表格卡片填充剩余空间
-      min-height: 0;
-      overflow: hidden;
-    }
-
-    // 加载和空状态需要padding
-    .ml-loading,
-    .ml-empty {
-      padding: var(--ml-spacing-lg);
-    }
+    // 使用默认的卡片样式
   }
 
-  // 账户表格包装器优化
+  // 账户表格包装器
   .account-table-wrapper {
-    flex: 1 !important;
-    min-height: 0 !important; // 关键：允许 flex 子项缩小
-    max-height: calc(100vh - 280px) !important; // 强制设置最大高度
-    overflow-y: scroll !important; // 强制显示滚动条
-    overflow-x: auto !important; // 允许水平滚动以适应缩放
-    padding: var(--ml-spacing-lg); // 在内部设置padding
+    max-height: 60vh; // 使用最大高度限制，内部滚动
+    overflow-y: auto;
+    overflow-x: auto;
+    padding: var(--ml-spacing-lg);
 
     // 自定义滚动条样式
     &::-webkit-scrollbar {
@@ -239,7 +214,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--ml-spacing);
-  height: 100%;
+  padding: 4px;
 
   // 规则卡片
   .rule-card {
@@ -309,23 +284,18 @@
   display: flex;
   flex-direction: column;
   gap: var(--ml-spacing);
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+  padding: 4px;
 
   // 配置卡片固定在顶部
   .config-card {
-    flex-shrink: 0;
     padding: var(--ml-spacing-sm);
   }
 
   // 可滚动的内容区域
   .preview-scroll-wrapper {
-    flex: 1 !important;
-    min-height: 0 !important;
-    max-height: calc(100vh - 280px) !important; // 强制设置最大高度
-    overflow-y: scroll !important;
-    overflow-x: auto !important;
+    max-height: 60vh; // 使用最大高度限制
+    overflow-y: auto;
+    overflow-x: auto;
     padding: 0 var(--ml-spacing-sm) var(--ml-spacing-xs) var(--ml-spacing-sm);
     display: flex;
     flex-direction: column;

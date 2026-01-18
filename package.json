@@ -20,6 +20,7 @@
   ],
   "devDependencies": {
     "@koishijs/client": "^5.30.11",
+    "@koishijs/plugin-puppeteer": "^3.2.0",
     "@types/mailparser": "^3.4.6"
   },
   "peerDependencies": {
@@ -36,12 +37,10 @@
     }
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.88",
-    "imapflow": "^1.2.4",
-    "linkedom": "^0.18.12",
+    "imapflow": "^1.2.6",
     "mailparser": "^3.9.1",
     "marked": "^17.0.1",
-    "postal-mime": "^2.7.1"
+    "postal-mime": "^2.7.3"
   },
   "koishi": {
     "description": {
@@ -55,6 +54,9 @@
         "database",
         "console",
         "server"
+      ],
+      "optional": [
+        "puppeteer"
       ]
     }
   }

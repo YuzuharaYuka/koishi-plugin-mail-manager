@@ -9,11 +9,13 @@ import type {
   ForwardRule,
   ForwardElement,
   ForwardTarget,
+  ForwardMode,
   RenderConfig,
   PaginatedResponse,
   ForwardPreviewResponse,
   ConnectionTestResult,
   Stats,
+  ForwardResult,
 } from './types'
 
 /** 通用 API 调用封装 */
@@ -84,7 +86,7 @@ export const mailApi = {
 
   /** 手动转发 */
   forward: (mailId: number, ruleId?: number) =>
-    call<void>('mail-manager/mails/forward', mailId, ruleId),
+    call<ForwardResult>('mail-manager/mails/forward', mailId, ruleId),
 
   /** 批量删除邮件 */
   batchDelete: (accountId?: number, days?: number) =>
@@ -119,6 +121,7 @@ export interface PreviewParams {
   elements?: ForwardElement[]
   customCss?: string
   renderConfig?: Partial<RenderConfig>
+  forwardMode?: ForwardMode
 }
 
 export const previewApi = {

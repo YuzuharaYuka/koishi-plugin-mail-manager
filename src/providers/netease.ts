@@ -2,13 +2,21 @@
  * 网易邮箱适配器 (163/126/Yeah.net)
  * 网易邮箱特点：
  * - 需要发送 IMAP ID 标识
- * - 连接不稳定，需要更保守的重连策略
+ * - IDLE 超时非常短（约 200 秒），需要频繁发送 NOOP 保活
  * - 授权码登录
  */
 
 import type { ImapFlowOptions } from 'imapflow'
 import type { MailAccount } from '../types'
 import { MailProviderAdapter, type ProviderFeatures } from './base'
+
+/**
+ * 网易 IMAP 服务器的 IDLE 超时时间约为 200 秒（3分20秒）
+ * 为了保持连接稳定，我们需要在此之前发送 NOOP 命令
+ * 使用 90 秒的心跳间隔，留有足够的安全余量
+ */
+const NETEASE_IDLE_TIMEOUT = 200000 // 200秒
+const NETEASE_HEARTBEAT_INTERVAL = 90000 // 90秒，远小于 IDLE 超时
 
 export class NeteaseMailProvider extends MailProviderAdapter {
   readonly name = 'netease'
@@ -33,6 +41,10 @@ export class NeteaseMailProvider extends MailProviderAdapter {
       } as any,
       greetingTimeout: 30000,
       socketTimeout: 60000,
+      // 关键配置：禁用 ImapFlow 的自动 IDLE，改用主动 NOOP 保活
+      // ImapFlow 默认会在空闲时进入 IDLE 模式，但网易的 IDLE 超时太短
+      // 通过设置较短的 idleTimeout，让 ImapFlow 更频繁地刷新 IDLE
+      idleTimeout: NETEASE_HEARTBEAT_INTERVAL,
     }
 
     // 网易邮箱需要发送 IMAP ID
@@ -58,8 +70,9 @@ export class NeteaseMailProvider extends MailProviderAdapter {
       supportsQresync: false,
       maxConcurrentConnections: 2,
       recommendedBatchSize: 30,
+      // 网易邮箱必须启用心跳，且间隔要短于其 IDLE 超时
       requiresHeartbeat: true,
-      heartbeatInterval: 300000, // 5分钟
+      heartbeatInterval: NETEASE_HEARTBEAT_INTERVAL,
     }
   }
 

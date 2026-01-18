@@ -8,6 +8,7 @@
 .mail-listener-app {
   // 主题色 - 更柔和的蓝色
   --ml-primary: #1677ff;
+  --ml-primary-rgb: 22, 119, 255;
   --ml-primary-hover: #4096ff;
   --ml-primary-light: #e6f4ff;
   --ml-primary-border: #91caff;
@@ -31,6 +32,7 @@
   // 背景色
   --ml-bg: var(--k-card-bg);
   --ml-bg-base: var(--k-color-bg-1);
+  --ml-hover: rgba(0, 0, 0, 0.04);
   --ml-bg-hover: var(--k-hover-bg);
   --ml-bg-container: #ffffff;
 
@@ -66,7 +68,24 @@
   --ml-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   --ml-transition-fast: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
+  // 代码编辑器颜色
+  --ml-code-bg: #1e1e1e;
+  --ml-code-text: #d4d4d4;
+
   * {
     box-sizing: border-box;
+  }
+}
+
+// 深色模式支持
+@media (prefers-color-scheme: dark) {
+  .mail-listener-app {
+    --ml-bg-container: var(--k-card-bg, #1f1f1f);
+    --ml-bg-base: var(--k-color-bg-1, #141414);
+    --ml-bg-hover: var(--k-hover-bg, rgba(255, 255, 255, 0.08));
+    --ml-text-tertiary: rgba(255, 255, 255, 0.25);
+    --ml-border-light: rgba(255, 255, 255, 0.08);
+    --ml-border-secondary: rgba(255, 255, 255, 0.12);
+    --ml-hover: rgba(255, 255, 255, 0.04);
   }
 }
