@@ -125,6 +125,7 @@ export function initState(
 
 /**
  * 清理全局状态（用于热重载）
+ * 清空所有状态引用，释放内存，防止旧实例泄漏。
  */
 export function clearState(): void {
   activeConnections.clear()
@@ -132,6 +133,10 @@ export function clearState(): void {
   rulesCache.data = null
   rulesCache.lastUpdate = 0
   rulesCache.queryPromise = null
+  _context = null
+  _pluginConfig = null
+  _logger = null
+  _mailRenderer = null
 }
 
 /**

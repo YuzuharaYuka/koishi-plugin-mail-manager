@@ -9,20 +9,21 @@ import type {
   StoredMail,
   ForwardRule,
   ForwardTarget,
-  ForwardElement,
+  FailureStrategy,
   RuleMatchStrategy,
 } from '../types'
 import { LogModule } from '../logger'
+import { DEFAULT_FORWARD_ELEMENTS, DEFAULT_RENDER_CONFIG } from '../render'
+import { sleep } from '../utils'
 import {
   activeConnections,
   getContext,
-  getConfig,
   getLogger,
   getMailRenderer,
 } from './state'
 import { connectAccount } from './accounts'
 import { markAsForwarded, getMail, createMail } from './mails'
-import { getRules, matchConditions, findMatchingRule, getMatchingRules } from './rules'
+import { getRules, findMatchingRule, getMatchingRules } from './rules'
 import type { ParsedMail } from '../parser'
 
 // ============ 类型定义 ============
@@ -40,21 +41,13 @@ export interface ForwardResult {
   failedTargets?: ForwardTarget[]
 }
 
+/** 处理队列上限，防止内存泄漏 */
+const MAX_PROCESSING_MAILS = 1000
+
 /**
  * 正在处理的邮件集合（防止并发重复处理）
  */
 const processingMails = new Set<number>()
-
-/**
- * 转发队列 - 用于防止过快发送导致的限流
- */
-const forwardQueue: Array<{
-  mailId: number
-  ruleId: number
-  resolve: (value: ForwardResult) => void
-  reject: (error: Error) => void
-}> = []
-let isProcessingQueue = false
 
 // ============ 新邮件处理 ============
 
@@ -83,11 +76,16 @@ export async function handleNewMail(accountId: number, parsedMail: ParsedMail): 
  */
 export async function processAutoForwardingAsync(mail: StoredMail): Promise<void> {
   const logger = getLogger()
-  const config = getConfig()
 
   // 防止同一邮件被并发处理
   if (processingMails.has(mail.id)) {
     logger.debug(LogModule.FORWARD, `邮件 #${mail.id} 正在处理中，跳过`)
+    return
+  }
+
+  // 防止处理队列无限增长
+  if (processingMails.size >= MAX_PROCESSING_MAILS) {
+    logger.warn(LogModule.FORWARD, `处理队列已满 (${processingMails.size}/${MAX_PROCESSING_MAILS})，跳过邮件 #${mail.id}`)
     return
   }
 
@@ -159,11 +157,13 @@ function logForwardResult(logger: ReturnType<typeof getLogger>, result: ForwardR
   }
 }
 
-/**
- * 等待指定毫秒数
- */
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+function createFailedResult(message: string, totalTargets: number = 0): ForwardResult {
+  return {
+    success: false,
+    successCount: 0,
+    totalTargets,
+    errors: [message],
+  }
 }
 
 // ============ 手动转发 ============
@@ -177,12 +177,7 @@ export async function forwardMail(
 
   const mail = await getMail(mailId)
   if (!mail) {
-    return {
-      success: false,
-      successCount: 0,
-      totalTargets: 0,
-      errors: ['邮件不存在'],
-    }
+    return createFailedResult('邮件不存在')
   }
 
   try {
@@ -190,23 +185,13 @@ export async function forwardMail(
     const targets = targetOverride || rule?.targets || []
 
     if (targets.length === 0) {
-      return {
-        success: false,
-        successCount: 0,
-        totalTargets: 0,
-        errors: ['没有可用的转发目标'],
-      }
+      return createFailedResult('没有可用的转发目标')
     }
 
     return await executeForward(mailId, rule?.id, targets)
   } catch (e) {
     logger.error(LogModule.FORWARD, `转发邮件失败: ${(e as Error).message}`)
-    return {
-      success: false,
-      successCount: 0,
-      totalTargets: 0,
-      errors: [(e as Error).message],
-    }
+    return createFailedResult((e as Error).message)
   }
 }
 
@@ -271,12 +256,7 @@ export async function executeForward(
 
   const targets = targetOverride || rule?.targets || []
   if (targets.length === 0) {
-    return {
-      success: false,
-      successCount: 0,
-      totalTargets: 0,
-      errors: ['没有转发目标'],
-    }
+    return createFailedResult('没有转发目标')
   }
 
   // 如果没有指定规则，创建一个默认规则用于渲染
@@ -287,12 +267,7 @@ export async function executeForward(
     messageElements = await mailRenderer.generateForwardElements(mail, effectiveRule)
   } catch (e) {
     logger.error(LogModule.FORWARD, `渲染消息失败: ${(e as Error).message}`)
-    return {
-      success: false,
-      successCount: 0,
-      totalTargets: targets.length,
-      errors: [`渲染失败: ${(e as Error).message}`],
-    }
+    return createFailedResult(`渲染失败: ${(e as Error).message}`, targets.length)
   }
 
   // 广播到目标
@@ -312,7 +287,7 @@ export async function executeForward(
 /**
  * 根据失败策略决定是否标记邮件为已转发
  */
-function shouldMarkAsForwarded(result: ForwardResult, strategy: string): boolean {
+function shouldMarkAsForwarded(result: ForwardResult, strategy: FailureStrategy): boolean {
   switch (strategy) {
     case 'require-all':
       return result.success // 只有全部成功才标记
@@ -335,16 +310,8 @@ function createDefaultRule(): ForwardRule {
     conditionLogic: 'and',
     conditions: [],
     targets: [],
-    elements: [],
-    renderConfig: {
-      imageWidth: 800,
-      backgroundColor: '#ffffff',
-      textColor: '#333333',
-      fontSize: 14,
-      padding: 20,
-      showBorder: true,
-      borderColor: '#e0e0e0',
-    },
+    elements: [...DEFAULT_FORWARD_ELEMENTS],
+    renderConfig: { ...DEFAULT_RENDER_CONFIG },
     failureStrategy: 'mark-partial',
     delayMs: 0,
     skipForwarded: true,

@@ -57,7 +57,7 @@ export function generateRandomId(prefix?: string): string {
  * @param template 模板字符串
  * @param args 参数列表
  */
-export function formatString(template: string, args: any[]): string {
+export function formatString(template: string, args: unknown[]): string {
   if (args.length === 0) return template
   let result = template
   for (const arg of args) {

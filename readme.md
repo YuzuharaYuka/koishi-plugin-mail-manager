@@ -3,6 +3,7 @@
 [![npm](https://img.shields.io/npm/v/koishi-plugin-mail-manager?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-mail-manager)
 
 邮件监听与自动转发插件。支持多账号 IMAP 监听、规则匹配自动转发、WebUI 管理界面。
+缓慢调试中,暂不可用。
 
 ## 功能特性
 

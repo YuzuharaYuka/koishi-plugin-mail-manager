@@ -67,7 +67,7 @@ export async function createAccount(data: CreateMailAccountRequest): Promise<Mai
     updatedAt: now,
   })
 
-  logger.debug(LogModule.RULE, `创建账号 ${account.email}`)
+  logger.debug(LogModule.SYSTEM, `创建账号 ${account.email}`)
 
   if (account.enabled) {
     connectAccount(account.id).catch((error) => {
@@ -100,7 +100,7 @@ export async function deleteAccount(id: number): Promise<void> {
   await disconnectAccount(id)
   await ctx.database.remove(TABLE_MAILS, { accountId: id })
   await ctx.database.remove(TABLE_ACCOUNTS, { id })
-  logger.debug(LogModule.RULE, `删除账号 #${id}`)
+  logger.debug(LogModule.SYSTEM, `删除账号 #${id}`)
 }
 
 // ============ 连接管理 ============

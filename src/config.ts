@@ -16,6 +16,7 @@ export interface Config {
   connectivityTestTimeout: number
 }
 
+// 每次加载配置时生成新密钥（未持久化时作为默认值）
 const generateDefaultKey = () => randomBytes(32).toString('base64')
 
 export const Config: Schema<Config> = Schema.intersect([

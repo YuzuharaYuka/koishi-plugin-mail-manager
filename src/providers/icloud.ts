@@ -11,11 +11,15 @@ export class iCloudProvider extends MailProviderAdapter {
   readonly name = 'icloud'
   readonly displayName = 'iCloud'
   readonly supportedDomains = ['icloud.com', 'me.com', 'mac.com']
+  private readonly defaultHost = 'imap.mail.me.com'
 
   getImapConfig(account: MailAccount, resolvedHost?: string, proxyUrl?: string): Partial<ImapFlowOptions> {
+    const targetHost = this.resolveImapHost(account, resolvedHost, this.defaultHost)
+    const servername = this.resolveServerName(account, this.defaultHost)
+
     const config: Partial<ImapFlowOptions> = {
-      host: resolvedHost || account.imapHost,
-      port: account.imapPort,
+      host: targetHost,
+      port: account.imapPort || 993,
       secure: account.imapTls,
       auth: {
         user: account.email,
@@ -26,15 +30,13 @@ export class iCloudProvider extends MailProviderAdapter {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2',
         // 始终设置 servername 以支持 TLS SNI
-        servername: account.imapHost,
-      } as any,
+        servername,
+      },
       greetingTimeout: 30000,
       socketTimeout: 60000,
     }
 
-    if (proxyUrl) {
-      config.proxy = proxyUrl
-    }
+    this.applyProxyConfig(config, proxyUrl, servername)
 
     return config
   }
@@ -47,11 +49,20 @@ export class iCloudProvider extends MailProviderAdapter {
       maxConcurrentConnections: 3,
       recommendedBatchSize: 50,
       requiresHeartbeat: false,
+
+      // iCloud 对 IDLE 支持较好，但在部分地区网络下存在中断概率
+      maxIdleTime: 22 * 60 * 1000,
+      listenStrategy: 'idle-with-fallback',
+      pollInterval: 120 * 1000,
+      connectionCheckInterval: 60 * 1000,
+      idleReliability: 68,
     }
   }
 
   getErrorHint(error: Error): string | null {
-    if (error.message.includes('AUTHENTICATIONFAILED')) {
+    const message = error.message.toLowerCase()
+
+    if (message.includes('authenticationfailed')) {
       return '认证失败，iCloud 需要使用应用专用密码。请到 Apple ID 管理页面 -> 安全性 -> 应用专用密码 中生成'
     }
     return null

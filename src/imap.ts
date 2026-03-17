@@ -24,27 +24,9 @@ import {
   formatString,
   resolveDnsWithConnectivityTest,
   getFriendlyErrorMessage,
+  SYNC_STRATEGY,
+  CONNECTION_STRATEGY,
 } from './utils'
-
-// ==================== 配置常量 ====================
-
-const SYNC_STRATEGY = {
-  BATCH_SIZE: 30,
-  FETCH_TIMEOUT: 30000,
-  RETRY_THRESHOLD: 50,
-  EXTENDED_TIMEOUT: 60000,
-  SMALL_IMAGE_LIMIT: 500 * 1024, // 500KB
-  MAX_MAIL_SIZE: 25 * 1024 * 1024, // 25MB - 单封邮件最大大小
-  MAX_BATCH_SIZE: 100 * 1024 * 1024, // 100MB - 单批次最大总大小
-} as const
-
-const CONNECTION_STRATEGY = {
-  TIMEOUT: 10000,
-  DISCONNECT_WAIT: 200,
-  DISCONNECT_TIMEOUT: 3000,
-  MAX_DISCONNECT_WAIT: 5000,
-  POLL_INTERVAL: 100,
-} as const
 
 // ==================== 日志工具 ====================
 
@@ -125,6 +107,7 @@ export class ImapConnection {
 
   // 缓存属性
   private readonly provider: MailProviderAdapter
+  private readonly providerFeatures: ReturnType<MailProviderAdapter['getFeatures']>
   private readonly retentionDays: number
 
   constructor(
@@ -145,6 +128,7 @@ export class ImapConnection {
     private readonly onStatusChanged?: (status: MailAccount['status'], error?: string) => void
   ) {
     this.provider = MailProviderFactory.getProvider(account)
+    this.providerFeatures = this.provider.getFeatures()
     this.retentionDays = config.mailRetentionDays
     logger.debug('使用 %s 配置: %s', this.provider.displayName, account.email)
   }
@@ -172,7 +156,7 @@ export class ImapConnection {
    */
   async connect(): Promise<void> {    // 检查是否已销毁
     if (this.disposed) {
-      logger.debug('Connection %s already disposed, skip connect', this.account.email)
+      logger.debug('%s 已销毁，跳过连接', this.account.email)
       return
     }
     // 立即取消任何待定的重连，防止竞态
@@ -311,7 +295,7 @@ export class ImapConnection {
   private async ensurePreviousDisconnectCompletes(): Promise<void> {
     if (!this.state.isDisconnecting) return
 
-    logger.debug('Waiting for previous disconnect to complete for %s', this.account.email)
+    logger.debug('等待 %s 上一次断开完成', this.account.email)
 
     const maxChecks = CONNECTION_STRATEGY.MAX_DISCONNECT_WAIT / CONNECTION_STRATEGY.POLL_INTERVAL
     for (let i = 0; i < maxChecks; i++) {
@@ -324,7 +308,7 @@ export class ImapConnection {
 
   private async disconnectIfActive(): Promise<void> {
     if (this.imapFlow || this.state.isConnecting) {
-      logger.debug('Account %s active, disconnecting first', this.account.email)
+      logger.debug('%s 仍活跃，先断开', this.account.email)
       await this.disconnect()
       await sleep(CONNECTION_STRATEGY.DISCONNECT_WAIT)
     }
@@ -414,10 +398,10 @@ export class ImapConnection {
     this.imapFlow.on('error', (err) => {
       // 忽略断开连接时的 null 引用错误（ImapFlow 内部问题）
       if (this.disposed || this.state.isDisconnecting) {
-        logger.debug('Ignoring error during disconnect: %s', err.message)
+        logger.debug('断开过程中忽略错误: %s', err.message)
         return
       }
-      logger.error('IMAP error for %s: %s', this.account.email, err.message)
+      logger.error('%s IMAP 错误: %s', this.account.email, err.message)
     })
   }
 
@@ -432,7 +416,7 @@ export class ImapConnection {
       this.account.imapHost,
       this.provider.getCustomErrorMatchers()
     )
-    logger.error('Connection failed for %s: %s', this.account.email, friendlyMsg)
+    logger.error('%s 连接失败: %s', this.account.email, friendlyMsg)
 
     this.cleanupClient()
     this.notifyStatus('error', friendlyMsg)
@@ -470,23 +454,23 @@ export class ImapConnection {
   private tryScheduleReconnect(): void {
     // 检查是否已销毁
     if (this.disposed) {
-      logger.debug('Connection %s disposed, skip reconnect', this.account.email)
+      logger.debug('%s 已销毁，跳过重连', this.account.email)
       return
     }
 
     // 防止重复调度
     if (this.reconnectTimer) {
-      logger.debug('Reconnect already scheduled for %s, skip', this.account.email)
+      logger.debug('%s 重连已计划，跳过', this.account.email)
       return
     }
 
     if (this.state.isConnected || this.state.isConnecting) {
-      logger.debug('Already connected or connecting for %s, skip reconnect', this.account.email)
+      logger.debug('%s 已连接或正在连接，跳过重连', this.account.email)
       return
     }
 
     if (!this.config.autoReconnect) {
-      logger.debug('Auto-reconnect disabled for %s', this.account.email)
+      logger.debug('%s 自动重连已禁用', this.account.email)
       return
     }
 
@@ -513,19 +497,19 @@ export class ImapConnection {
 
     // 首要检查：是否已销毁
     if (this.disposed) {
-      logger.debug('Connection %s disposed, abort reconnect', this.account.email)
+      logger.debug('%s 已销毁，中止重连', this.account.email)
       return
     }
 
     // 多重检查，防止竞态
     if (this.state.isConnected || this.state.isConnecting) {
-      logger.debug('Already connected/connecting for %s, skip reconnect execution', this.account.email)
+      logger.debug('%s 已连接或正在连接，跳过重连执行', this.account.email)
       this.reconnectAttempts = 0 // 重置计数
       return
     }
 
     if (!this.account.enabled) {
-      logger.debug('Account %s disabled, skip reconnect', this.account.email)
+      logger.debug('%s 已禁用，跳过重连', this.account.email)
       return
     }
 
@@ -533,7 +517,7 @@ export class ImapConnection {
       await this.connect()
       logger.info('%s 重连成功', this.account.email)
     } catch (error) {
-      logger.debug('Reconnection failed for %s: %s', this.account.email, (error as Error).message)
+      logger.debug('%s 重连失败: %s', this.account.email, (error as Error).message)
     }
   }
 
@@ -558,7 +542,7 @@ export class ImapConnection {
 
     this.stopHealthCheck()
 
-    const features = this.provider.getFeatures()
+    const features = this.providerFeatures
 
     // 优先使用 provider 指定的心跳间隔（如果 provider 要求心跳）
     let intervalMs: number
@@ -567,7 +551,7 @@ export class ImapConnection {
       logger.debug('%s 使用服务商心跳: %ds', this.account.email, Math.floor(intervalMs / 1000))
     } else {
       intervalMs = this.config.healthCheckInterval * 1000
-      logger.debug('Starting health check for %s (interval: %ds)', this.account.email, this.config.healthCheckInterval)
+      logger.debug('%s 启动健康检查 (间隔 %ds)', this.account.email, this.config.healthCheckInterval)
     }
 
     // 使用 Koishi 托管的定时器
@@ -582,7 +566,7 @@ export class ImapConnection {
     if (this.healthCheckTimer) {
       this.healthCheckTimer() // 调用 dispose 函数取消定时器
       this.healthCheckTimer = null
-      logger.debug('Stopped health check for %s', this.account.email)
+      logger.debug('%s 健康检查已停止', this.account.email)
     }
   }
 
@@ -593,7 +577,7 @@ export class ImapConnection {
     this.lastHealthCheck = now
 
     if (!this.state.isConnected || !this.imapFlow) {
-      logger.debug('Health check: %s not connected', this.account.email)
+      logger.debug('健康检查: %s 未连接', this.account.email)
       return
     }
 
@@ -615,7 +599,7 @@ export class ImapConnection {
 
       await this.imapFlow.noop()
       this.healthCheckFailCount = 0 // 重置失败计数
-      logger.debug('Health check: %s OK', this.account.email)
+      logger.debug('健康检查: %s 正常', this.account.email)
     } catch (error) {
       this.healthCheckFailCount++
       logger.debug('%s 健康检查异常 (%d/%d): %s',
@@ -665,7 +649,7 @@ export class ImapConnection {
     this.lastMailCount = mailbox.exists
 
     // 获取 provider 特性
-    const features = this.provider.getFeatures()
+    const features = this.providerFeatures
     const strategy = features.listenStrategy || 'hybrid'
 
     logger.debug('[监听] 策略=%s, 可靠性=%d, 超时=%ds',
@@ -786,7 +770,7 @@ export class ImapConnection {
         await this.scanUnseenMails()
       }
     } catch (err) {
-      logger.error('Scan failed for %s: %s', this.account.email, (err as Error).message)
+      logger.error('%s 扫描失败: %s', this.account.email, (err as Error).message)
     } finally {
       this.isScanning = false
     }
@@ -805,7 +789,7 @@ export class ImapConnection {
     this.stopPolling()
     this.listenerState.pollEnabled = true
 
-    const features = this.provider.getFeatures()
+    const features = this.providerFeatures
     const idleReliability = features.idleReliability || 60
     const configuredInterval = features.pollInterval || 120 * 1000
 
@@ -847,11 +831,11 @@ export class ImapConnection {
       // 使用 NOOP 命令检查新邮件
       // NOOP 会触发服务器发送任何待处理的通知（包括 EXISTS）
       await this.imapFlow.noop()
-      logger.debug('[POLL] NOOP OK for %s', this.account.email)
+      logger.debug('[POLL] %s NOOP 正常', this.account.email)
 
       // 检查最近是否收到 EXISTS 事件
       const timeSinceLastExists = now - this.listenerState.lastExistsEventTime
-      const features = this.provider.getFeatures()
+      const features = this.providerFeatures
       const idleReliability = features.idleReliability || 60
 
       // 如果 IDLE 可靠性低 或 长时间没有收到事件，执行主动搜索
@@ -860,12 +844,12 @@ export class ImapConnection {
       if (shouldSearch) {
         const uids = await this.searchUnseenUids()
         if (uids.length > 0) {
-          logger.debug('[POLL] Found %d unseen mails for %s', uids.length, this.account.email)
+          logger.debug('[POLL] 发现 %d 封未读邮件 (%s)', uids.length, this.account.email)
           this.triggerScan()
         }
       }
     } catch (err) {
-      logger.debug('[POLL] Check failed for %s: %s', this.account.email, (err as Error).message)
+      logger.debug('[POLL] %s 检查失败: %s', this.account.email, (err as Error).message)
       // 轮询失败可能意味着连接已断开
       if (!this.isConnectionUsable()) {
         this.handleZombieConnection()
@@ -894,7 +878,7 @@ export class ImapConnection {
 
     this.listenerState.idleLoopRunning = true
 
-    const features = this.provider.getFeatures()
+    const features = this.providerFeatures
     // 使用 provider 配置的 maxIdleTime，或默认 20 分钟
     const maxIdleTime = features.maxIdleTime || 20 * 60 * 1000
 
@@ -909,7 +893,7 @@ export class ImapConnection {
             break
           }
 
-          logger.debug('[IDLE] Entering IDLE for %s', this.account.email)
+          logger.debug('[IDLE] %s 进入 IDLE', this.account.email)
           const idleStartTime = Date.now()
 
           // 调用 imapflow 的 idle 方法
@@ -917,7 +901,7 @@ export class ImapConnection {
           await this.imapFlow.idle()
 
           const idleDuration = Date.now() - idleStartTime
-          logger.debug('[IDLE] Returned for %s after %ds', this.account.email, Math.floor(idleDuration / 1000))
+          logger.debug('[IDLE] %s 在 %ds 后返回', this.account.email, Math.floor(idleDuration / 1000))
 
           // IDLE 成功返回，重置失败计数
           this.listenerState.idleFailCount = 0
@@ -933,7 +917,7 @@ export class ImapConnection {
           this.listenerState.idleFailCount++
           const errMsg = (err as Error).message
 
-          logger.debug('[IDLE] Error for %s (fail #%d): %s',
+          logger.debug('[IDLE] %s 错误 (第 %d 次): %s',
             this.account.email, this.listenerState.idleFailCount, errMsg)
 
           // 连续失败过多，可能是连接问题
@@ -956,7 +940,7 @@ export class ImapConnection {
     runIdleLoop().catch(err => {
       this.listenerState.idleLoopRunning = false
       if (!this.disposed) {
-        logger.error('[IDLE] Fatal error for %s: %s', this.account.email, err.message)
+        logger.error('[IDLE] %s 致命错误: %s', this.account.email, err.message)
       }
     })
   }
@@ -973,7 +957,7 @@ export class ImapConnection {
 
     // 检查 imapflow 的 usable 属性
     if (!this.imapFlow.usable) {
-      logger.debug('[CHECK] imapFlow.usable is false for %s', this.account.email)
+      logger.debug('[CHECK] %s imapFlow.usable 为 false', this.account.email)
       return false
     }
 
@@ -1026,13 +1010,13 @@ export class ImapConnection {
   private async searchUnseenUids(): Promise<number[]> {
     if (!this.imapFlow) return []
 
-    const criteria: any = { seen: false }
+    const criteria: Record<string, unknown> = { seen: false }
 
     if (this.retentionDays > 0) {
       const since = new Date()
       since.setDate(since.getDate() - this.retentionDays)
       criteria.since = since
-      logger.debug('Searching unseen mails since %s (retention: %d days)',
+      logger.debug('搜索 %s 以来的未读邮件 (保留 %d 天)',
         since.toISOString().split('T')[0], this.retentionDays)
     }
 
@@ -1048,7 +1032,7 @@ export class ImapConnection {
         this.onMailReceived(mail)
       }
     } catch (err) {
-      logger.error('Failed to process mail %s: %s', uid, (err as Error).message)
+      logger.error('处理邮件 %s 失败: %s', uid, (err as Error).message)
     }
   }
 
@@ -1057,7 +1041,7 @@ export class ImapConnection {
   private async findMailsToSync(days?: number): Promise<number[]> {
     if (!this.imapFlow) return []
 
-    const criteria: any = { all: true }
+    const criteria: Record<string, unknown> = { all: true }
     if (days && days > 0) {
       const since = new Date()
       since.setDate(since.getDate() - days)
@@ -1082,11 +1066,12 @@ export class ImapConnection {
       const { mails, timeouts } = await this.fetchBatch(batch, i + 1, batches.length)
 
       skippedUids.push(...timeouts)
-      totalSynced += mails.length
 
       if (onBatch && mails.length > 0) {
         await onBatch(mails)
       }
+
+      totalSynced += mails.length
     }
 
     if (skippedUids.length > 0 && skippedUids.length < SYNC_STRATEGY.RETRY_THRESHOLD) {
@@ -1101,8 +1086,20 @@ export class ImapConnection {
     const start = Date.now()
     logger.debug('同步批次 %d/%d (%d 封)...', index, total, uids.length)
 
-    const promises = uids.map(uid => this.downloadMailWithTimeout(uid, SYNC_STRATEGY.FETCH_TIMEOUT))
-    const results = await Promise.all(promises)
+    // 受控并发：避免单批次 Promise.all 导致内存峰值过高
+    const maxConcurrent = Math.max(
+      1,
+      Math.floor(SYNC_STRATEGY.MAX_BATCH_SIZE / SYNC_STRATEGY.MAX_MAIL_SIZE)
+    )
+    const uidChunks = chunkArray(uids, maxConcurrent)
+    const results: Array<ParsedMail | null> = []
+
+    for (const chunk of uidChunks) {
+      const chunkResults = await Promise.all(
+        chunk.map(uid => this.downloadMailWithTimeout(uid, SYNC_STRATEGY.FETCH_TIMEOUT))
+      )
+      results.push(...chunkResults)
+    }
 
     const mails = results.filter((m): m is ParsedMail => m !== null)
     const timeouts = uids.filter((_, i) => results[i] === null)
@@ -1157,7 +1154,9 @@ export class ImapConnection {
       }
 
       // 再次检查实际下载的大小
-      const sourceBuffer = message.source as Buffer
+      const sourceBuffer = Buffer.isBuffer(message.source)
+        ? message.source
+        : Buffer.from(message.source)
       if (sourceBuffer.length > SYNC_STRATEGY.MAX_MAIL_SIZE) {
         logger.debug('邮件 %s 实际大小 (%d bytes) 超限，跳过', uid, sourceBuffer.length)
         return null
@@ -1172,7 +1171,7 @@ export class ImapConnection {
 
       return parsedMail
     } catch (err) {
-      logger.error('Failed to download/parse mail %s: %s', uid, (err as Error).message)
+      logger.error('下载/解析邮件 %s 失败: %s', uid, (err as Error).message)
       return null
     }
   }
@@ -1191,7 +1190,7 @@ export class ImapConnection {
       this.mailboxLock = await this.imapFlow.getMailboxLock('INBOX')
       return await action()
     } catch (err) {
-      logger.error('Mailbox operation failed: %s', (err as Error).message)
+      logger.error('邮箱操作失败: %s', (err as Error).message)
       throw err
     } finally {
       this.releaseLock()
@@ -1243,7 +1242,7 @@ export class ImapConnection {
       ])
     } catch (err) {
       // 忽略关闭过程中的错误
-      logger.debug('Error during close session: %s', (err as Error).message)
+      logger.debug('关闭会话时出错: %s', (err as Error).message)
     }
   }
 
@@ -1262,7 +1261,7 @@ export class ImapConnection {
     if (this.reconnectTimer) {
       this.reconnectTimer() // 调用 dispose 函数取消定时器
       this.reconnectTimer = null
-      logger.debug('Cancelled reconnect timer for %s', this.account.email)
+      logger.debug('%s 重连定时器已取消', this.account.email)
     }
   }
 
@@ -1282,22 +1281,22 @@ export class ImapConnection {
 
   private validateMail(mail: ParsedMail | null): mail is ParsedMail {
     if (!mail) {
-      logger.debug('Mail is null')
+      logger.debug('邮件为空')
       return false
     }
 
     if (!mail.from || (Array.isArray(mail.from) && mail.from.length === 0)) {
-      logger.debug('Mail has no sender (from field)')
+      logger.debug('邮件无发件人')
       return false
     }
 
     if (!mail.subject && !mail.text && !mail.html) {
-      logger.debug('Mail has no content (subject, text, or html)')
+      logger.debug('邮件无内容')
       return false
     }
 
     if (!mail.messageId) {
-      logger.debug('Mail has no messageId, will generate one')
+      logger.debug('邮件无 messageId，将自动生成')
     }
 
     return true
@@ -1306,28 +1305,52 @@ export class ImapConnection {
 
 // ==================== 数据转换工具 ====================
 
-export function parseMailAddress(addr: any): MailAddress | null {
+export function parseMailAddress(addr: unknown): MailAddress | null {
   if (!addr) return null
+
   if (typeof addr === 'string') {
-    return addr.trim() ? { address: addr.trim() } : null
+    const value = addr.trim()
+    return value ? { address: value } : null
   }
-  const address = addr?.address?.trim()
-  if (!address) return null
-  return {
-    name: addr?.name?.trim() || undefined,
-    address,
+
+  if (typeof addr === 'object') {
+    const obj = addr as { address?: unknown; name?: unknown }
+    const address = typeof obj.address === 'string' ? obj.address.trim() : ''
+    if (!address) return null
+
+    const name = typeof obj.name === 'string' ? obj.name.trim() : ''
+    return {
+      name: name || undefined,
+      address,
+    }
   }
+
+  return null
 }
 
-export function parseMailAddresses(addrs: any): MailAddress[] {
+export function parseMailAddresses(addrs: unknown): MailAddress[] {
   if (!addrs) return []
-  if (Array.isArray(addrs.value)) {
-    return addrs.value.map(parseMailAddress).filter((a: MailAddress | null): a is MailAddress => a !== null)
+
+  // ParsedMail 常见格式：MailAddress[]
+  if (Array.isArray(addrs)) {
+    return addrs
+      .map(parseMailAddress)
+      .filter((a): a is MailAddress => a !== null)
   }
-  if (addrs.address) {
+
+  // mailparser AddressObject 格式：{ value: [...] }
+  if (typeof addrs === 'object' && Array.isArray((addrs as { value?: unknown[] }).value)) {
+    return (addrs as { value: unknown[] }).value
+      .map(parseMailAddress)
+      .filter((a): a is MailAddress => a !== null)
+  }
+
+  // 单个地址对象格式：{ address, name? }
+  if (typeof addrs === 'object' && addrs !== null && 'address' in addrs) {
     const parsed = parseMailAddress(addrs)
     return parsed ? [parsed] : []
   }
+
   return []
 }
 
@@ -1342,13 +1365,13 @@ export function convertParsedMail(accountId: number, mail: ParsedMail): Omit<Sto
   // 截断过长的文本内容
   if (textContent && textContent.length > MAX_TEXT_LENGTH) {
     textContent = textContent.substring(0, MAX_TEXT_LENGTH) + '\n\n[内容过长，已截断]'
-    logger.debug('Truncated text content from %d to %d chars', mail.text!.length, MAX_TEXT_LENGTH)
+    logger.debug('文本内容已从 %d 截断至 %d 字符', mail.text!.length, MAX_TEXT_LENGTH)
   }
 
   // 截断过长的 HTML 内容
   if (htmlContent && htmlContent.length > MAX_HTML_LENGTH) {
     htmlContent = htmlContent.substring(0, MAX_HTML_LENGTH) + '\n<!-- 内容过长，已截断 -->'
-    logger.debug('Truncated HTML content from %d to %d chars', mail.html!.length, MAX_HTML_LENGTH)
+    logger.debug('HTML 内容已从 %d 截断至 %d 字符', mail.html!.length, MAX_HTML_LENGTH)
   }
 
   // 安全地解析发件人，提供默认值
@@ -1372,20 +1395,42 @@ export function convertParsedMail(accountId: number, mail: ParsedMail): Omit<Sto
   }
 }
 
-function processAttachments(attachments?: any[]): MailAttachment[] {
+function processAttachments(attachments?: Array<{
+  filename?: unknown
+  contentType?: unknown
+  size?: unknown
+  cid?: unknown
+  content?: unknown
+}>): MailAttachment[] {
   if (!attachments) return []
 
   return attachments.map(att => {
-    const isSmallImage = att.contentType.startsWith('image/') &&
-                        att.content &&
-                        att.size < SYNC_STRATEGY.SMALL_IMAGE_LIMIT
+    const contentType = typeof att.contentType === 'string'
+      ? att.contentType
+      : 'application/octet-stream'
+    const size = typeof att.size === 'number'
+      ? att.size
+      : (Buffer.isBuffer(att.content) ? att.content.length : 0)
+
+    const isSmallImage = contentType.startsWith('image/') &&
+                        Buffer.isBuffer(att.content) &&
+                        size > 0 &&
+                        size < SYNC_STRATEGY.SMALL_IMAGE_LIMIT
+
+    const filename = typeof att.filename === 'string' && att.filename.trim()
+      ? att.filename
+      : 'unknown'
+
+    const cid = typeof att.cid === 'string' ? att.cid : undefined
 
     return {
-      filename: att.filename || 'unknown',
-      contentType: att.contentType,
-      size: att.size,
-      cid: att.cid,
-      content: isSmallImage ? (att.content as Buffer).toString('base64') : undefined
+      filename,
+      contentType,
+      size,
+      cid,
+      content: isSmallImage && Buffer.isBuffer(att.content)
+        ? att.content.toString('base64')
+        : undefined
     }
   })
 }

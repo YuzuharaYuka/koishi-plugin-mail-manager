@@ -627,7 +627,12 @@ declare module '@koishijs/plugin-console' {
     'mail-manager/health'(): Promise<{
       status: 'healthy' | 'degraded'
       timestamp: string
-      accounts: { total: number; connected: number; error: number; errorDetails: any[] }
+      accounts: {
+        total: number
+        connected: number
+        error: number
+        errorDetails: Array<{ id: number; email: string; lastError?: string }>
+      }
       memory: { heapUsed: number; heapTotal: number; rss: number; external: number }
       uptime: number
     }>

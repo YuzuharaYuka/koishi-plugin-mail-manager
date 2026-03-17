@@ -68,7 +68,12 @@ export class MailProviderFactory {
    * 注册自定义提供商
    */
   static registerProvider(provider: MailProviderAdapter): void {
-    this.providers.push(provider)
+    const index = this.providers.findIndex(p => p.name === provider.name)
+    if (index >= 0) {
+      this.providers[index] = provider
+    } else {
+      this.providers.push(provider)
+    }
   }
 }
 

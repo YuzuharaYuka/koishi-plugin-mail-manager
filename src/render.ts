@@ -17,7 +17,7 @@ import { htmlToImage } from './html2image'
 const logger = new Logger('mail-manager/render')
 
 /**
- * Default configuration for rendering.
+ * 默认渲染配置
  */
 export const DEFAULT_RENDER_CONFIG: RenderConfig = {
   imageWidth: 800,
@@ -50,7 +50,7 @@ export const SUMMARY_ELEMENTS: ForwardElement[] = [
 ]
 
 /**
- * Helper class for formatting mail data.
+ * 邮件数据格式化工具类
  */
 class MailFormatter {
   static formatDate(date: Date): string {
@@ -317,38 +317,28 @@ class HtmlGenerator {
     </div>`
   }
 
-  private static processHtmlContent(mail: StoredMail): string {
-    if (mail.htmlContent) {
-      let html = mail.htmlContent
-      // Replace CID images with Base64 data
-      for (const att of mail.attachments) {
-        if (att.cid && att.content) {
-          const escapedCid = att.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          html = html.replace(
-            new RegExp(`cid:${escapedCid}`, 'g'),
-            `data:${att.contentType};base64,${att.content}`
-          )
-        }
+  // 注意：processHtmlContent 与 processHtmlContentForBody 中的 CID 替换逻辑已提取为公共方法
+  /** 将 HTML 中的 CID 内嵌图片引用替换为 Base64 数据 URI */
+  private static replaceCidImages(html: string, attachments: MailAttachment[]): string {
+    for (const att of attachments) {
+      if (att.cid && att.content) {
+        const escapedCid = att.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        html = html.replace(
+          new RegExp(`cid:${escapedCid}`, 'g'),
+          `data:${att.contentType};base64,${att.content}`
+        )
       }
-      return html
     }
-    return ''
+    return html
+  }
+
+  private static processHtmlContent(mail: StoredMail): string {
+    return mail.htmlContent ? this.replaceCidImages(mail.htmlContent, mail.attachments) : ''
   }
 
   private static processHtmlContentForBody(mail: StoredMail): string | null {
     if (mail.htmlContent) {
-      let html = mail.htmlContent
-      // Replace CID images with Base64 data
-      for (const att of mail.attachments) {
-        if (att.cid && att.content) {
-          const escapedCid = att.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          html = html.replace(
-            new RegExp(`cid:${escapedCid}`, 'g'),
-            `data:${att.contentType};base64,${att.content}`
-          )
-        }
-      }
-      return `<div class="mail-body">${html}</div>`
+      return `<div class="mail-body">${this.replaceCidImages(mail.htmlContent, mail.attachments)}</div>`
     } else if (mail.textContent) {
       return `<div class="mail-body"><pre style="white-space: pre-wrap; word-wrap: break-word; font-family: inherit;">${MailFormatter.escapeHtml(mail.textContent)}</pre></div>`
     }
@@ -489,7 +479,7 @@ export class MailRenderer {
     const result: h[] = []
 
     // 从规则中提取正则配置
-    const regexConfig: RegexConfig | undefined = (rule as any).regexConfig
+    const regexConfig: RegexConfig | undefined = rule.regexConfig
 
     logger.debug(`Generating forward elements for mail "${mail.subject}" with mode: ${mode}`)
 

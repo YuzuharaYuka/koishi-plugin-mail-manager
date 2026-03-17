@@ -49,7 +49,7 @@ export async function parseMail(source: Buffer | Uint8Array): Promise<ParsedMail
     return result
   } catch (err) {
     // 回退路径：mailparser（处理特殊编码、复杂结构）
-    logger.warn('postal-mime 解析失败，回退到 mailparser:', err.message)
+    logger.warn('postal-mime 解析失败，回退到 mailparser: %s', (err as Error)?.message || String(err))
     stats.postalMimeFailed++
     stats.mailparserFallback++
     return await parseWithMailparser(source)
@@ -93,7 +93,7 @@ export function parseMailDate(dateStr: string | undefined | null): Date | undefi
         ))
       }
     },
-    // ISO 8601: "2024-01-01T12:00:00Z" or "2024-01-01T12:00:00+08:00"
+    // ISO 8601: "2024-01-01T12:00:00Z" 或 "2024-01-01T12:00:00+08:00"
     {
       regex: /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/i,
       parser: (m) => new Date(m[0])
@@ -173,19 +173,19 @@ async function parseWithPostalMime(source: Buffer | Uint8Array): Promise<ParsedM
 
     if (dateMatch) {
       const dateStr = dateMatch[1].trim()
-      logger.debug('postal-mime: No date parsed, trying manual extraction. Subject: %s', email.subject || '(no subject)')
-      logger.debug('  → Raw Date header: %s', dateStr)
+      logger.debug('postal-mime 未解析到日期，尝试手动提取。Subject: %s', email.subject || '(no subject)')
+      logger.debug('  → 原始 Date 头: %s', dateStr)
 
       // 使用增强的日期解析函数
       parsedDate = parseMailDate(dateStr)
 
       if (parsedDate) {
-        logger.debug('  → Manual parse succeeded: %s', parsedDate.toISOString())
+        logger.debug('  → 手动解析成功: %s', parsedDate.toISOString())
       } else {
-        logger.debug('  → Manual parse failed: Unable to parse date')
+        logger.debug('  → 手动解析失败')
       }
     } else {
-      logger.debug('postal-mime: No Date header in raw email. Subject: %s', email.subject || '(no subject)')
+      logger.debug('postal-mime: 原始邮件无 Date 头。Subject: %s', email.subject || '(no subject)')
     }
   }
 
@@ -231,37 +231,45 @@ async function parseWithMailparser(source: Buffer | Uint8Array): Promise<ParsedM
 }
 
 /** 解析 postal-mime 的单个地址 */
-function parsePostalAddress(addr: any): MailAddress | undefined {
-  if (!addr || !addr.address) return undefined
+function parsePostalAddress(addr: unknown): MailAddress | undefined {
+  if (!addr || typeof addr !== 'object') return undefined
+  const obj = addr as { address?: unknown; name?: unknown }
+  if (typeof obj.address !== 'string' || !obj.address) return undefined
   return {
-    name: addr.name || undefined,
-    address: addr.address,
+    name: typeof obj.name === 'string' ? obj.name : undefined,
+    address: obj.address,
   }
 }
 
 /** 解析 postal-mime 的地址列表 */
-function parsePostalAddressList(addrs: any[]): MailAddress[] | undefined {
+function parsePostalAddressList(addrs: unknown): MailAddress[] | undefined {
   if (!addrs || !Array.isArray(addrs) || addrs.length === 0) return undefined
-  return addrs
-    .filter(a => a && a.address)
-    .map(a => ({
-      name: a.name || undefined,
-      address: a.address,
-    }))
+  const parsed = addrs.map(parsePostalAddress).filter((a): a is MailAddress => !!a)
+  return parsed.length > 0 ? parsed : undefined
 }
 
 /** 解析 postal-mime 的附件 */
-function parsePostalAttachments(attachments: any[]): MailAttachment[] | undefined {
+function parsePostalAttachments(attachments: unknown): MailAttachment[] | undefined {
   if (!attachments || !Array.isArray(attachments) || attachments.length === 0) return undefined
 
   return attachments
-    .map(att => ({
-      filename: att.filename || 'unnamed',
-      contentType: att.mimeType || 'application/octet-stream',
-      size: att.content?.length || 0,
-      content: att.content,
-      contentId: att.contentId || undefined,
-    }))
+    .map((att) => {
+      const item = att as {
+        filename?: unknown
+        mimeType?: unknown
+        content?: unknown
+        contentId?: unknown
+      }
+      const contentType = typeof item.mimeType === 'string' ? item.mimeType : 'application/octet-stream'
+      const size = Buffer.isBuffer(item.content) ? item.content.length : 0
+      return {
+        filename: typeof item.filename === 'string' ? item.filename : 'unnamed',
+        contentType,
+        size,
+        content: Buffer.isBuffer(item.content) ? item.content.toString('base64') : undefined,
+        cid: typeof item.contentId === 'string' ? item.contentId : undefined,
+      }
+    })
     .filter(att => {
       // 只保留小于 500KB 的图片附件
       if (!att.contentType.startsWith('image/')) return false
@@ -271,13 +279,13 @@ function parsePostalAttachments(attachments: any[]): MailAttachment[] | undefine
 }
 
 /** 解析 mailparser 的单个地址 */
-function parseMailparserAddress(addr: any): MailAddress | undefined {
+function parseMailparserAddress(addr: unknown): MailAddress | undefined {
   if (!addr) return undefined
-  if (typeof addr === 'object' && 'value' in addr && Array.isArray(addr.value)) {
-    const first = addr.value[0]
-    if (first && first.address) {
+  if (typeof addr === 'object' && 'value' in addr && Array.isArray((addr as { value?: unknown[] }).value)) {
+    const first = (addr as { value: Array<{ address?: unknown; name?: unknown }> }).value[0]
+    if (first && typeof first.address === 'string' && first.address) {
       return {
-        name: first.name || undefined,
+        name: typeof first.name === 'string' ? first.name : undefined,
         address: first.address,
       }
     }
@@ -286,14 +294,14 @@ function parseMailparserAddress(addr: any): MailAddress | undefined {
 }
 
 /** 解析 mailparser 的地址列表 */
-function parseMailparserAddressList(addrs: any): MailAddress[] | undefined {
+function parseMailparserAddressList(addrs: unknown): MailAddress[] | undefined {
   if (!addrs) return undefined
-  if (typeof addrs === 'object' && 'value' in addrs && Array.isArray(addrs.value)) {
-    const list = addrs.value
-      .filter((a: any) => a && a.address)
-      .map((a: any) => ({
-        name: a.name || undefined,
-        address: a.address,
+  if (typeof addrs === 'object' && 'value' in addrs && Array.isArray((addrs as { value?: unknown[] }).value)) {
+    const list = (addrs as { value: Array<{ address?: unknown; name?: unknown }> }).value
+      .filter((a) => a && typeof a.address === 'string' && a.address)
+      .map((a) => ({
+        name: typeof a.name === 'string' ? a.name : undefined,
+        address: a.address as string,
       }))
     return list.length > 0 ? list : undefined
   }
@@ -301,17 +309,32 @@ function parseMailparserAddressList(addrs: any): MailAddress[] | undefined {
 }
 
 /** 解析 mailparser 的附件 */
-function parseMailparserAttachments(attachments: any[]): MailAttachment[] | undefined {
+function parseMailparserAttachments(attachments: unknown): MailAttachment[] | undefined {
   if (!attachments || !Array.isArray(attachments) || attachments.length === 0) return undefined
 
   return attachments
-    .map(att => ({
-      filename: att.filename || 'unnamed',
-      contentType: att.contentType || 'application/octet-stream',
-      size: att.size || att.content?.length || 0,
-      content: att.content,
-      contentId: att.contentId || att.cid || undefined,
-    }))
+    .map((att) => {
+      const item = att as {
+        filename?: unknown
+        contentType?: unknown
+        size?: unknown
+        content?: unknown
+        contentId?: unknown
+        cid?: unknown
+      }
+      const contentType = typeof item.contentType === 'string' ? item.contentType : 'application/octet-stream'
+      const size = typeof item.size === 'number'
+        ? item.size
+        : (Buffer.isBuffer(item.content) ? item.content.length : 0)
+      return {
+        filename: typeof item.filename === 'string' ? item.filename : 'unnamed',
+        contentType,
+        size,
+        content: Buffer.isBuffer(item.content) ? item.content.toString('base64') : undefined,
+        cid: (typeof item.contentId === 'string' ? item.contentId : undefined)
+          || (typeof item.cid === 'string' ? item.cid : undefined),
+      }
+    })
     .filter(att => {
       // 只保留小于 500KB 的图片附件
       if (!att.contentType.startsWith('image/')) return false
@@ -405,9 +428,7 @@ export function htmlToText(html: string): string {
 }
 
 /**
- * 预处理 HTML 用于截图
- * 注意：现在使用 Puppeteer 渲染，此函数可能不再需要
- * 保留用于向后兼容
+ * 预处理 HTML 用于截图（保留用于兼容）
  *
  * @param html 原始 HTML
  * @param options 配置项

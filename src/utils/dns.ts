@@ -125,10 +125,10 @@ export interface DnsResolverOptions {
   dnsTimeout?: number
   /** 日志函数 */
   logger?: {
-    debug: (msg: string, ...args: any[]) => void
-    info: (msg: string, ...args: any[]) => void
-    warn: (msg: string, ...args: any[]) => void
-    error: (msg: string, ...args: any[]) => void
+    debug: (msg: string, ...args: unknown[]) => void
+    info: (msg: string, ...args: unknown[]) => void
+    warn: (msg: string, ...args: unknown[]) => void
+    error: (msg: string, ...args: unknown[]) => void
   }
 }
 
@@ -137,6 +137,47 @@ const defaultOptions: Required<Omit<DnsResolverOptions, 'logger'>> = {
   retryDelay: 1000,
   forceIPv4: true,
   dnsTimeout: 10000, // 10秒超时
+}
+
+interface DnsCacheEntry {
+  addresses: string[]
+  timestamp: number
+}
+
+const DNS_CACHE_TTL_MS = 60 * 1000
+const DNS_CACHE_MAX_SIZE = 200
+const dnsCache = new Map<string, DnsCacheEntry>()
+
+function getDnsCacheKey(hostname: string, forceIPv4: boolean): string {
+  return `${hostname}|${forceIPv4 ? 'v4' : 'all'}`
+}
+
+function getCachedDnsAddresses(cacheKey: string): string[] | null {
+  const cached = dnsCache.get(cacheKey)
+  if (!cached) return null
+
+  if (Date.now() - cached.timestamp > DNS_CACHE_TTL_MS) {
+    dnsCache.delete(cacheKey)
+    return null
+  }
+
+  return [...cached.addresses]
+}
+
+function setCachedDnsAddresses(cacheKey: string, addresses: string[]): void {
+  if (!addresses.length) return
+
+  dnsCache.set(cacheKey, {
+    addresses: [...addresses],
+    timestamp: Date.now(),
+  })
+
+  if (dnsCache.size > DNS_CACHE_MAX_SIZE) {
+    const oldest = dnsCache.keys().next().value
+    if (oldest) {
+      dnsCache.delete(oldest)
+    }
+  }
 }
 
 /**
@@ -154,6 +195,18 @@ export async function resolveDns(
   const opts = { ...defaultOptions, ...options }
   const log = opts.logger
 
+  const cacheKey = getDnsCacheKey(hostname, opts.forceIPv4)
+  const cachedAddresses = getCachedDnsAddresses(cacheKey)
+  if (cachedAddresses && cachedAddresses.length > 0) {
+    const selected = strategy.selectBestAddress(cachedAddresses)
+    log?.debug('[DNS] Cache hit: %s -> [%s]', hostname, cachedAddresses.join(', '))
+    return {
+      selectedAddress: selected.address,
+      allAddresses: cachedAddresses,
+      isPreferred: selected.isPreferred,
+    }
+  }
+
   let allAddresses: string[] = []
   let selectedResult = { address: hostname, isPreferred: false }
 
@@ -161,6 +214,7 @@ export async function resolveDns(
     try {
       const addresses = await dnsLookup(hostname, opts.forceIPv4, opts.dnsTimeout)
       allAddresses = addresses
+      setCachedDnsAddresses(cacheKey, addresses)
 
       log?.debug('[DNS] Attempt %d: Resolved %s -> [%s]', attempt, hostname, addresses.join(', '))
 
@@ -222,7 +276,7 @@ async function dnsLookup(hostname: string, forceIPv4: boolean, timeoutMs: number
         if (err) {
           reject(err)
         } else {
-          resolve(addresses.map((addr: any) => addr.address))
+          resolve(addresses.map(addr => addr.address))
         }
       }
     )
@@ -253,7 +307,7 @@ async function dnsResolve4Backup(hostname: string): Promise<string[]> {
  */
 export function createCustomLookup(
   logger?: DnsResolverOptions['logger']
-): (hostname: string, options: any, callback: (err: Error | null, address?: string, family?: number) => void) => void {
+): (hostname: string, options: unknown, callback: (err: Error | null, address?: string, family?: number) => void) => void {
   return (hostname, _options, callback) => {
     logger?.debug('Custom DNS lookup for host: %s (forcing IPv4)', hostname)
 

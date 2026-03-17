@@ -27,6 +27,9 @@ import {
 } from './state'
 import { getMail } from './mails'
 
+/** 正则输入截断最大长度 */
+const MAX_REGEX_INPUT_LENGTH = 50000
+
 // ============ 规则测试结果类型 ============
 
 export interface RuleTestResult {
@@ -298,11 +301,11 @@ export function checkSingleCondition(mail: StoredMail, condition: ForwardConditi
  * 常见的 ReDoS 模式：嵌套量词、重复的交替、回溯陷阱
  */
 function hasReDoSRisk(pattern: string): boolean {
-  // 检测嵌套量词模式，如 (a+)+ 或 (a*)*
+  // 嵌套量词：如 (a+)+ 或 (a*)*，会导致指数级回溯
   const nestedQuantifiers = /\([^)]*[+*][^)]*\)[+*]|\([^)]*\([^)]*[+*]/
-  // 检测重复的交替模式，如 (a|a)+
+  // 重叠交替：如 (a|a)+，分支间存在重叠匹配
   const overlappingAlternation = /\(([^|)]+)\|.*\1.*\)[+*]/
-  // 检测危险的回溯模式
+  // 贪婪回溯陷阱：多个非惰性 .* 组合导致大量回溯
   const backtrackTrap = /\.\*[^?].*\.\*/
 
   return nestedQuantifiers.test(pattern) ||
@@ -329,7 +332,7 @@ export function safeRegexTest(pattern: string, input: string, maxLength: number 
       return false
     }
 
-    const safeInput = input.length > 50000 ? input.substring(0, 50000) : input
+    const safeInput = input.length > MAX_REGEX_INPUT_LENGTH ? input.substring(0, MAX_REGEX_INPUT_LENGTH) : input
     const regex = new RegExp(pattern, 'i')
     return regex.test(safeInput)
   } catch (e) {
@@ -362,12 +365,13 @@ export async function getAvailableTargets(): Promise<ForwardTarget[]> {
   const logger = getLogger()
   const targets: ForwardTarget[] = []
 
-  for (const bot of ctx.bots) {
-    if (!bot.isActive) continue
+  const activeBots = ctx.bots.filter(bot => bot.isActive)
 
+  await Promise.all(activeBots.map(async (bot) => {
     try {
       const guilds = await bot.getGuildList()
-      for (const guild of guilds.data) {
+
+      await Promise.all(guilds.data.map(async (guild) => {
         const channels = await bot.getChannelList(guild.id)
         for (const channel of channels.data) {
           targets.push({
@@ -377,11 +381,11 @@ export async function getAvailableTargets(): Promise<ForwardTarget[]> {
             displayName: `${guild.name} - ${channel.name}`,
           })
         }
-      }
+      }))
     } catch (e) {
       logger.debug(LogModule.SYSTEM, `获取频道列表失败: ${(e as Error).message}`)
     }
-  }
+  }))
 
   return targets
 }
@@ -443,7 +447,8 @@ export async function findMatchingRule(mail: StoredMail, ruleId?: number): Promi
   }
 
   const rules = await getRules()
-  // 按优先级排序后返回第一个匹配的规则
-  const sortedRules = [...rules].sort((a, b) => (a.priority || 100) - (b.priority || 100))
-  return sortedRules.find(r => r.enabled && matchRule(mail, r)) || null
+  const enabledRules = rules.filter(r => r.enabled)
+  // getMatchingRules 已按优先级排序，直接取第一个匹配结果
+  const matchingRules = getMatchingRules(mail, enabledRules)
+  return matchingRules[0] || null
 }

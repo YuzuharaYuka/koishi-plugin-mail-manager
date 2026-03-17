@@ -174,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { send, receive } from '@koishijs/client'
 import { accountApi } from '../api'
 import type { MailAccount } from '../types'

@@ -11,18 +11,14 @@ import type {
   ForwardRule,
 } from './types'
 
-/**
- * 日志代理 - 简化格式为 mail-manager 消息内容
- *
- * 封装了 getLogger() 调用，确保在任何时候都能安全地记录日志。
- */
+/** 日志代理，封装 getLogger() 确保安全记录 */
 class LoggerProxy {
-  info(msg: string, ...args: any[]) { this.log('info', msg, args) }
-  warn(msg: string, ...args: any[]) { this.log('warn', msg, args) }
-  error(msg: string, ...args: any[]) { this.log('error', msg, args) }
-  debug(msg: string, ...args: any[]) { this.log('debug', msg, args) }
+  info(msg: string, ...args: unknown[]) { this.log('info', msg, args) }
+  warn(msg: string, ...args: unknown[]) { this.log('warn', msg, args) }
+  error(msg: string, ...args: unknown[]) { this.log('error', msg, args) }
+  debug(msg: string, ...args: unknown[]) { this.log('debug', msg, args) }
 
-  private log(level: 'info' | 'warn' | 'error' | 'debug', msg: string, args: any[]) {
+  private log(level: 'info' | 'warn' | 'error' | 'debug', msg: string, args: unknown[]) {
     try {
       const logger = getLogger()
       const message = args.length > 0 ? this.formatMessage(msg, args) : msg
@@ -32,7 +28,7 @@ class LoggerProxy {
     }
   }
 
-  private formatMessage(format: string, args: any[]): string {
+  private formatMessage(format: string, args: unknown[]): string {
     let result = format
     for (const arg of args) {
       result = result.replace(/%[sd]/, String(arg))
@@ -43,28 +39,17 @@ class LoggerProxy {
 
 const logger = new LoggerProxy()
 
-/**
- * 注册控制台 API
- *
- * 将 API 注册逻辑委托给 ApiRegistrar 类处理，保持入口函数简洁。
- */
+/** 注册控制台 API */
 export function registerConsoleApi(ctx: Context, config: Config): void {
   new ApiRegistrar(ctx, config).register()
   logger.debug('API 已注册')
 }
 
-/**
- * API 注册器
- *
- * 负责将各类 API 注册到 Koishi 控制台。
- * 按照功能模块对 API 进行分组，提高代码的可读性和可维护性。
- */
+/** API 注册器，按功能模块分组注册到 Koishi 控制台 */
 class ApiRegistrar {
   constructor(private ctx: Context, private config: Config) {}
 
-  /**
-   * 注册所有 API
-   */
+  /** 注册所有 API */
   register() {
     this.registerAccountApis()
     this.registerMailApis()
@@ -74,9 +59,7 @@ class ApiRegistrar {
     this.registerCleanupApis()
   }
 
-  /**
-   * 注册账号管理相关 API
-   */
+  /** 账号管理 API */
   private registerAccountApis() {
     this.addListener('mail-manager/accounts/list', () => core.getAccounts())
 
@@ -101,9 +84,7 @@ class ApiRegistrar {
     this.addListener('mail-manager/accounts/sync', (id: number, days?: number) => core.syncAccountMails(id, days))
   }
 
-  /**
-   * 注册邮件管理相关 API
-   */
+  /** 邮件管理 API */
   private registerMailApis() {
     this.addListener('mail-manager/mails/list', (query: MailListQuery) => core.getMails(query))
 
@@ -122,9 +103,7 @@ class ApiRegistrar {
     this.addListener('mail-manager/mails/batch-delete', (accountId?: number, days?: number) => core.batchDeleteMails(accountId, days))
   }
 
-  /**
-   * 注册规则管理相关 API
-   */
+  /** 规则管理 API */
   private registerRuleApis() {
     this.addListener('mail-manager/rules/list', () => core.getRules())
 
@@ -140,12 +119,12 @@ class ApiRegistrar {
 
     this.addListener('mail-manager/rules/delete', (id: number) => core.deleteRule(id))
 
-    // 新增：规则测试 API
+    // 规则测试
     this.addListener('mail-manager/rules/test', async (ruleId: number, mailId: number) => {
       return await core.testRule(ruleId, mailId)
     })
 
-    // 新增：规则导出 API
+    // 规则导出
     this.addListener('mail-manager/rules/export', async () => {
       const rules = await core.getRules()
       return {
@@ -160,7 +139,7 @@ class ApiRegistrar {
       }
     })
 
-    // 新增：规则导入 API
+    // 规则导入
     this.addListener('mail-manager/rules/import', async (data: { version: string; rules: Partial<ForwardRule>[] }) => {
       if (!data || !data.rules || !Array.isArray(data.rules)) {
         throw new Error('无效的导入数据格式')
@@ -169,18 +148,31 @@ class ApiRegistrar {
       let imported = 0
       let skipped = 0
 
+      // 只查询一次并维护本地集合，避免在循环中频繁读取数据库/缓存
+      const existingRules = await core.getRules()
+      const existingNames = new Set(existingRules.map(r => r.name))
+
       for (const ruleData of data.rules) {
         try {
           // 检查是否已存在同名规则
-          const existingRules = await core.getRules()
-          const duplicate = existingRules.find(r => r.name === ruleData.name)
+          const name = ruleData.name?.trim()
+          if (!name) {
+            skipped++
+            continue
+          }
+
+          const duplicate = existingNames.has(name)
 
           if (duplicate) {
             skipped++
             continue
           }
 
-          await core.createRule(ruleData)
+          await core.createRule({
+            ...ruleData,
+            name,
+          })
+          existingNames.add(name)
           imported++
         } catch (e) {
           logger.warn('导入规则失败: %s', (e as Error).message)
@@ -192,16 +184,12 @@ class ApiRegistrar {
     })
   }
 
-  /**
-   * 注册预览相关 API
-   */
+  /** 预览 API */
   private registerPreviewApis() {
     this.addListener('mail-manager/preview', (request: ForwardPreviewRequest) => core.getForwardPreview(request))
   }
 
-  /**
-   * 注册系统信息相关 API
-   */
+  /** 系统信息 API */
   private registerSystemApis() {
     this.addListener('mail-manager/targets', () => core.getAvailableTargets())
 
@@ -286,6 +274,8 @@ class ApiRegistrar {
         })
         .execute()
 
+      const mem = process.memoryUsage()
+
       return {
         timestamp: new Date().toISOString(),
         accounts: {
@@ -302,16 +292,14 @@ class ApiRegistrar {
           enabled: rules.filter(r => r.enabled).length,
         },
         memory: {
-          heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-          rssMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+          heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+          rssMB: Math.round(mem.rss / 1024 / 1024),
         },
       }
     })
   }
 
-  /**
-   * 注册清理相关 API
-   */
+  /** 清理 API */
   private registerCleanupApis() {
     // 清理过期邮件
     this.addListener('mail-manager/cleanup/expired', async (dryRun: boolean = false) => {
@@ -319,10 +307,10 @@ class ApiRegistrar {
         throw new Error('未设置邮件保留天数，无法执行清理')
       }
 
-      // 使用 cleanup.ts 中的逻辑
+      // 使用 cleanup.ts 的逻辑
       const count = await cleanExpiredMails(this.ctx, this.config.mailRetentionDays, { dryRun })
 
-      // 计算截止日期用于展示
+      // 计算截止日期
       const cutoffDate = new Date()
       cutoffDate.setDate(cutoffDate.getDate() - this.config.mailRetentionDays)
 
@@ -345,10 +333,7 @@ class ApiRegistrar {
     })
   }
 
-  /**
-   * 辅助方法：批量删除所有邮件
-   * 添加最大批次限制，防止运行时间过长
-   */
+  /** 批量删除所有邮件，限制最大批次防止超时 */
   private async batchDeleteAllMails(maxBatches: number = 10000): Promise<number> {
     const BATCH_SIZE = 100
     let totalDeleted = 0
@@ -383,11 +368,8 @@ class ApiRegistrar {
     return totalDeleted
   }
 
-  /**
-   * 封装 addListener，提供类型提示并简化调用
-   */
-  private addListener(name: string, callback: (...args: any[]) => any) {
-    // 使用 as any 绕过 Koishi Console 的类型限制，因为我们是在动态注册
-    this.ctx.console.addListener(name as any, callback)
+  /** 封装 addListener，简化调用 */
+  private addListener(name: string, callback: (...args: unknown[]) => unknown) {
+    this.ctx.console.addListener(name as any, callback as any)
   }
 }

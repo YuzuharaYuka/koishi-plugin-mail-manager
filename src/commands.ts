@@ -1,12 +1,10 @@
 import { Context, $ } from 'koishi'
 import { Config } from './config'
 import { cleanExpiredMails } from './cleanup'
+import { sleep } from './utils'
 
 /**
- * Registers all available commands for the Mail Manager plugin.
- *
- * @param ctx The Koishi context.
- * @param config The plugin configuration.
+ * 注册邮件管理插件的所有命令
  */
 export function registerCommands(ctx: Context, config: Config) {
   registerCleanupCommand(ctx, config)
@@ -14,10 +12,6 @@ export function registerCommands(ctx: Context, config: Config) {
   registerGcCommand(ctx)
 }
 
-/**
- * Registers the 'mail.cleanup' command.
- * Allows administrators to manually clean up the mail database.
- */
 function registerCleanupCommand(ctx: Context, config: Config) {
   ctx.command('mail.cleanup', '清理邮件')
     .option('expired', '-e 清理过期邮件')
@@ -34,15 +28,12 @@ function registerCleanupCommand(ctx: Context, config: Config) {
 
       try {
         if (options.expired) {
-          if (config.mailRetentionDays <= 0) {
-            return '未设置保留天数'
-          }
+          if (config.mailRetentionDays <= 0) return '未设置保留天数'
 
           const isDryRun = !!options['dry-run']
-
           const count = await cleanExpiredMails(ctx, config.mailRetentionDays, {
             dryRun: isDryRun,
-            reportProgress: async (msg) => { await session.send(msg) }
+            reportProgress: async (msg) => { await session.send(msg) },
           })
 
           if (isDryRun) {
@@ -58,7 +49,6 @@ function registerCleanupCommand(ctx: Context, config: Config) {
           const totalMails = await ctx.database.eval('mail_manager.mails', row => $.count(row.id)) as number
           return `预览: ${totalMails || 0} 封邮件`
         }
-
       } catch (err) {
         ctx.logger.error('Cleanup failed: %s', (err as Error).message)
         return `失败: ${(err as Error).message}`
@@ -67,8 +57,7 @@ function registerCleanupCommand(ctx: Context, config: Config) {
 }
 
 /**
- * Registers the 'mail.memory' command.
- * Displays memory usage statistics for monitoring purposes.
+ * 注册 'mail.memory' 命令，显示内存使用情况
  */
 function registerMemoryCommand(ctx: Context) {
   ctx.command('mail.memory', '内存使用情况')
@@ -106,7 +95,7 @@ function registerGcCommand(ctx: Context) {
 
       const before = process.memoryUsage()
       global.gc()
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await sleep(100)
       const after = process.memoryUsage()
       const freedMB = ((before.heapUsed - after.heapUsed) / 1024 / 1024).toFixed(2)
 

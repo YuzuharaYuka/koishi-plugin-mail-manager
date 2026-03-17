@@ -43,10 +43,20 @@ const DEFAULT_OPTIONS: Required<Html2ImageOptions> = {
 
 let activeConversions = 0
 const MAX_CONCURRENT_CONVERSIONS = 3
+// 等待队列长度受实际并发请求数限制，无需额外上限
+const conversionWaiters: Array<() => void> = []
 
-const imageCache = new Map<string, { buffer: Buffer; timestamp: number }>()
+interface ImageCacheEntry {
+  buffer: Buffer
+  timestamp: number
+  size: number
+}
+
+const imageCache = new Map<string, ImageCacheEntry>()
+let imageCacheBytes = 0
 const CACHE_TTL = 3600000 // 1小时
 const MAX_CACHE_SIZE = 30
+const MAX_CACHE_BYTES = 30 * 1024 * 1024 // 30MB
 
 /**
  * 生成简单的字符串 hash
@@ -66,19 +76,54 @@ function simpleHash(str: string): string {
  */
 function cleanupCache(): void {
   const now = Date.now()
+
+  const removeEntry = (key: string, value?: ImageCacheEntry) => {
+    const entry = value || imageCache.get(key)
+    if (!entry) return
+    imageCache.delete(key)
+    imageCacheBytes = Math.max(0, imageCacheBytes - entry.size)
+  }
+
   for (const [key, value] of imageCache.entries()) {
     if (now - value.timestamp > CACHE_TTL) {
-      imageCache.delete(key)
+      removeEntry(key, value)
     }
   }
 
-  if (imageCache.size > MAX_CACHE_SIZE) {
+  if (imageCache.size > MAX_CACHE_SIZE || imageCacheBytes > MAX_CACHE_BYTES) {
     const entries = Array.from(imageCache.entries())
       .sort((a, b) => a[1].timestamp - b[1].timestamp)
-    const toRemove = entries.slice(0, entries.length - MAX_CACHE_SIZE)
-    for (const [key] of toRemove) {
-      imageCache.delete(key)
+
+    for (const [key, value] of entries) {
+      if (imageCache.size <= MAX_CACHE_SIZE && imageCacheBytes <= MAX_CACHE_BYTES) {
+        break
+      }
+      removeEntry(key, value)
     }
+  }
+}
+
+async function acquireConversionSlot(): Promise<void> {
+  if (activeConversions < MAX_CONCURRENT_CONVERSIONS) {
+    activeConversions++
+    return
+  }
+
+  await new Promise<void>((resolve) => {
+    conversionWaiters.push(resolve)
+  })
+
+  activeConversions++
+}
+
+function releaseConversionSlot(): void {
+  if (activeConversions > 0) {
+    activeConversions--
+  }
+
+  const next = conversionWaiters.shift()
+  if (next) {
+    next()
   }
 }
 
@@ -106,23 +151,26 @@ export async function htmlToImage(
 
   const opts = { ...DEFAULT_OPTIONS, ...options }
 
+  // 边界保护：防止异常超大 HTML 导致渲染内存峰值过高
+  const MAX_HTML_LENGTH = 2 * 1024 * 1024 // 2MB
+  if (html.length > MAX_HTML_LENGTH) {
+    throw new Error(`HTML 内容过大 (${html.length} chars)，已拒绝渲染以防止内存溢出`)
+  }
+
   // 生成缓存 key
   const cacheKey = simpleHash(html + JSON.stringify(opts))
 
   // 检查缓存
   const cached = imageCache.get(cacheKey)
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    logger.debug('HTML to image: cache hit')
+    // 命中后刷新时间，提升热点内容缓存命中率
+    cached.timestamp = Date.now()
+    logger.debug('HTML 转图片: 缓存命中')
     return cached.buffer
   }
 
-  // 并发限制
-  while (activeConversions >= MAX_CONCURRENT_CONVERSIONS) {
-    logger.debug(`Waiting for conversion slot (${activeConversions}/${MAX_CONCURRENT_CONVERSIONS})`)
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
-
-  activeConversions++
+  // 并发限制（无忙等）
+  await acquireConversionSlot()
   let page: any = null
 
   try {
@@ -157,7 +205,7 @@ export async function htmlToImage(
       const imageCount = await page.evaluate(() => document.images.length)
 
       if (imageCount > 0) {
-        logger.debug(`Found ${imageCount} images, waiting for load (timeout: ${imageLoadTimeout}ms)`)
+        logger.debug(`发现 ${imageCount} 张图片，等待加载（超时: ${imageLoadTimeout}ms）`)
 
         // 使用 Promise.race 实现带总体超时的图片加载等待
         await Promise.race([
@@ -190,12 +238,12 @@ export async function htmlToImage(
         ])
 
         const loadTime = Date.now() - imageLoadStart
-        logger.debug(`Image loading completed in ${loadTime}ms`)
+        logger.debug(`图片加载完成，耗时 ${loadTime}ms`)
       } else {
-        logger.debug('No images found in email')
+        logger.debug('邮件中未发现图片')
       }
     } catch (err) {
-      logger.debug('Image loading check failed:', err.message)
+      logger.debug('图片加载检查失败:', err.message)
     }
 
     // 获取内容实际高度
@@ -205,6 +253,7 @@ export async function htmlToImage(
       Math.ceil(boundingBox?.height || 800),
       opts.maxHeight
     )
+    await bodyHandle?.dispose()
 
     // 调整视口高度以匹配内容
     await page.setViewport({
@@ -214,7 +263,12 @@ export async function htmlToImage(
     })
 
     // 截图
-    const screenshotOptions: any = {
+    const screenshotOptions: {
+      type: 'png' | 'jpeg' | 'webp'
+      fullPage: boolean
+      omitBackground: boolean
+      quality?: number
+    } = {
       type: opts.format,
       fullPage: true,
       omitBackground: false,
@@ -227,10 +281,20 @@ export async function htmlToImage(
     const buffer = await page.screenshot(screenshotOptions)
 
     // 存入缓存
-    imageCache.set(cacheKey, { buffer, timestamp: Date.now() })
+    const existing = imageCache.get(cacheKey)
+    if (existing) {
+      imageCacheBytes = Math.max(0, imageCacheBytes - existing.size)
+    }
+    const entry: ImageCacheEntry = {
+      buffer,
+      timestamp: Date.now(),
+      size: buffer.length,
+    }
+    imageCache.set(cacheKey, entry)
+    imageCacheBytes += entry.size
 
-    // 清理缓存 - 只在接近满时触发，避免频繁清理
-    if (imageCache.size >= MAX_CACHE_SIZE) {
+    // 清理缓存 - 条目数或字节数接近上限时触发
+    if (imageCache.size >= MAX_CACHE_SIZE || imageCacheBytes >= MAX_CACHE_BYTES) {
       cleanupCache()
     }
 
@@ -238,7 +302,7 @@ export async function htmlToImage(
     return buffer
 
   } catch (error) {
-    logger.error('HTML to Image conversion failed:', error)
+    logger.error('HTML 转图片失败:', error)
     throw error
   } finally {
     // 确保页面被关闭
@@ -249,7 +313,7 @@ export async function htmlToImage(
         // 忽略关闭错误
       }
     }
-    activeConversions--
+    releaseConversionSlot()
   }
 }
 

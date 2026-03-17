@@ -1,33 +1,25 @@
-import { Context, $ } from 'koishi'
-import { Logger } from 'koishi'
+import { Context, $, Logger } from 'koishi'
 import { sleep } from './utils'
 
+// cleanup.ts 使用独立 logger，不依赖全局状态，确保在任何阶段都可安全调用
 const logger = new Logger('mail-manager')
 
-/**
- * Options for the mail cleanup process.
- */
+/** 邮件清理选项 */
 export interface CleanupOptions {
-  /**
-   * If true, only simulate the cleanup and return the count of mails that would be deleted.
-   */
+  /** 若为 true，仅统计待删除数量，不实际执行删除 */
   dryRun?: boolean
-
-  /**
-   * Optional callback to report progress during the cleanup.
-   */
+  /** 可选进度回调，用于向用户实时汇报进度 */
   reportProgress?: (message: string) => Promise<void>
 }
 
 /**
- * Cleans up expired mails from the database based on the retention policy.
+ * 批量清理过期邮件
  *
- * This function performs the cleanup in batches to avoid database locks and memory issues.
- *
- * @param ctx The Koishi context.
- * @param retentionDays The number of days to retain mails. Mails older than this will be deleted.
- * @param options Optional configuration for the cleanup process.
- * @returns A promise that resolves to the number of deleted mails (or would-be deleted in dry-run).
+ * 采用分批删除策略避免数据库锁定和内存峰值问题。
+ * @param ctx Koishi 上下文
+ * @param retentionDays 保留天数（必须 > 0）
+ * @param options 清理选项
+ * @returns 已删除的邮件数量
  */
 export async function cleanExpiredMails(
   ctx: Context,
@@ -36,101 +28,77 @@ export async function cleanExpiredMails(
 ): Promise<number> {
   const { dryRun = false, reportProgress } = options
 
-  // 1. Calculate the cutoff date
   if (retentionDays <= 0) {
-    throw new Error('Retention days must be greater than 0.')
+    throw new Error('保留天数必须大于 0')
   }
 
   const expirationThreshold = new Date()
   expirationThreshold.setDate(expirationThreshold.getDate() - retentionDays)
+  const condition = { receivedAt: { $lt: expirationThreshold } }
 
-  // 2. Count expired mails
-  // We use $.count to get the number of records without loading them into memory.
-  const expiredMailCount = await ctx.database.eval('mail_manager.mails', row => $.count(row.id), {
-    receivedAt: { $lt: expirationThreshold },
-  }) as number
+  // 仅统计，不加载邮件数据到内存
+  const expiredMailCount = await ctx.database.eval('mail_manager.mails', row => $.count(row.id), condition) as number
 
-  if (!expiredMailCount || expiredMailCount === 0) {
-    return 0
-  }
+  if (!expiredMailCount) return 0
 
-  // If it's a dry run, we just return the count.
-  if (dryRun) {
-    return expiredMailCount
-  }
-
-  // 3. Perform batch deletion
-  const BATCH_SIZE = 100
-  let totalDeleted = 0
+  if (dryRun) return expiredMailCount
 
   if (reportProgress) {
     await reportProgress(`发现 ${expiredMailCount} 封过期邮件，开始清理...`)
   }
 
-  while (totalDeleted < expiredMailCount) {
-    // Fetch a batch of IDs to delete
+  const BATCH_SIZE = 100
+  const MAX_BATCHES = 10000 // 防止异常时无限循环
+  let totalDeleted = 0
+  let batchCount = 0
+
+  while (true) {
+    if (++batchCount > MAX_BATCHES) {
+      logger.warn(`[清理] 已达最大批次限制 (${MAX_BATCHES})，终止循环`)
+      break
+    }
+
+    // 批量获取待删除 ID（避免一次性加载全部到内存）
     const batch = await ctx.database
       .select('mail_manager.mails')
-      .where({ receivedAt: { $lt: expirationThreshold } })
+      .where(condition)
       .limit(BATCH_SIZE)
       .project(['id'])
       .execute()
 
-    if (batch.length === 0) {
-      break
-    }
+    if (batch.length === 0) break
 
-    const batchIds = batch.map(mail => mail.id)
-
-    // Delete the batch
-    await ctx.database.remove('mail_manager.mails', batchIds)
+    await ctx.database.remove('mail_manager.mails', { id: { $in: batch.map(m => m.id) } })
 
     totalDeleted += batch.length
 
-    // Report progress periodically
     if (reportProgress && totalDeleted % 500 === 0) {
       await reportProgress(`已清理 ${totalDeleted}/${expiredMailCount}...`)
     }
 
-    // Small delay to prevent database starvation
+    // 短暂让出事件循环，避免阻塞数据库
     await sleep(50)
-
-    // Trigger Garbage Collection if available to keep memory footprint low
-    if (totalDeleted % 500 === 0 && global.gc) {
-      global.gc()
-    }
-  }
-
-  // Final GC
-  if (global.gc) {
-    global.gc()
   }
 
   return totalDeleted
 }
 
-// 固定的清理间隔：24小时
-const CLEANUP_INTERVAL = 86400000
+/** 自动清理任务的执行间隔：24 小时 */
+const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000
 
 /**
- * Schedules the automatic cleanup task.
- *
- * @param ctx The Koishi context.
- * @param config The plugin configuration.
+ * 注册自动清理定时任务
+ * 插件启动 30 秒后执行首次清理，此后每 24 小时执行一次。
  */
-export function scheduleAutoCleanup(ctx: Context, config: { autoCleanup: boolean, mailRetentionDays: number }) {
-  if (!config.autoCleanup || config.mailRetentionDays <= 0) {
-    return
-  }
+export function scheduleAutoCleanup(ctx: Context, config: { autoCleanup: boolean; mailRetentionDays: number }) {
+  if (!config.autoCleanup || config.mailRetentionDays <= 0) return
 
   const runCleanup = async () => {
     try {
-      logger.debug('[AutoClean] 开始清理...')
-
+      logger.debug('[自动清理] 开始...')
       const deletedCount = await cleanExpiredMails(ctx, config.mailRetentionDays, {
-        reportProgress: async (msg) => logger.debug(`[AutoClean] ${msg}`)
+        reportProgress: async (msg) => logger.debug(`[自动清理] ${msg}`),
       })
-
       if (deletedCount > 0) {
         logger.info(`[自动清理] 已删除 ${deletedCount} 封过期邮件`)
       }
@@ -139,11 +107,7 @@ export function scheduleAutoCleanup(ctx: Context, config: { autoCleanup: boolean
     }
   }
 
-  // Delay the first run to allow the application to start up fully
-  ctx.setTimeout(() => {
-    runCleanup().catch(err => logger.error(`[自动清理] 失败: ${err.message}`))
-  }, 30000)
-
-  // Schedule the recurring task
+  // 延迟首次执行，等待应用完全启动后再运行
+  ctx.setTimeout(() => runCleanup().catch(err => logger.error(`[自动清理] 失败: ${err.message}`)), 30000)
   ctx.setInterval(runCleanup, CLEANUP_INTERVAL)
 }

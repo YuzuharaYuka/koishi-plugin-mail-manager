@@ -130,7 +130,10 @@ export abstract class MailProviderAdapter {
   isSupportedEmail(email: string): boolean {
     const domain = email.split('@')[1]?.toLowerCase()
     if (!domain) return false
-    return this.supportedDomains.some(d => domain.includes(d))
+    return this.supportedDomains.some((d) => {
+      const normalized = d.toLowerCase()
+      return domain === normalized || domain.endsWith(`.${normalized}`)
+    })
   }
 
   /**
@@ -138,7 +141,10 @@ export abstract class MailProviderAdapter {
    */
   isSupportedHost(host: string): boolean {
     const hostLower = host.toLowerCase()
-    return this.supportedDomains.some(d => hostLower.includes(d))
+    return this.supportedDomains.some((d) => {
+      const normalized = d.toLowerCase()
+      return hostLower === normalized || hostLower.endsWith(`.${normalized}`)
+    })
   }
 
   /**
@@ -169,8 +175,10 @@ export abstract class MailProviderAdapter {
       'authentication failed',
       'invalid credentials',
       'login failed',
-      'user',
-      'password',
+      'invalid username',
+      'invalid user',
+      'wrong password',
+      'bad credentials',
     ]
 
     return !nonRetryableErrors.some(pattern => msg.includes(pattern))
@@ -211,6 +219,41 @@ export abstract class MailProviderAdapter {
    * 获取错误提示信息
    */
   getErrorHint?(error: Error): string | null
+
+  /**
+   * 规范化主机名，优先使用解析后的主机，其次账号配置，最后回退值
+   */
+  protected resolveImapHost(account: MailAccount, resolvedHost?: string, fallbackHost?: string): string {
+    const host = resolvedHost || account.imapHost || fallbackHost || ''
+    return host.trim()
+  }
+
+  /**
+   * 规范化 TLS SNI 主机名（必须是域名）
+   */
+  protected resolveServerName(account: MailAccount, fallbackHost?: string): string {
+    const host = account.imapHost || fallbackHost || ''
+    return host.trim()
+  }
+
+  /**
+   * 统一代理兼容逻辑：
+   * - 设置 proxy
+   * - HTTP/HTTPS 代理下强制使用域名作为 host，避免 CONNECT + SNI 失败
+   */
+  protected applyProxyConfig(
+    config: Partial<ImapFlowOptions>,
+    proxyUrl: string | undefined,
+    domainHost: string
+  ): void {
+    if (!proxyUrl) return
+
+    config.proxy = proxyUrl
+
+    if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
+      config.host = domainHost
+    }
+  }
 }
 
 /**
@@ -222,8 +265,11 @@ export class GenericMailProvider extends MailProviderAdapter {
   readonly supportedDomains: string[] = []
 
   getImapConfig(account: MailAccount, resolvedHost?: string, proxyUrl?: string): Partial<ImapFlowOptions> {
+    const targetHost = this.resolveImapHost(account, resolvedHost)
+    const servername = this.resolveServerName(account, targetHost)
+
     const config: Partial<ImapFlowOptions> = {
-      host: resolvedHost || account.imapHost,
+      host: targetHost,
       port: account.imapPort,
       secure: account.imapTls,
       auth: {
@@ -235,22 +281,13 @@ export class GenericMailProvider extends MailProviderAdapter {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2',
         // 始终设置 servername 以支持 TLS SNI（特别是使用代理时）
-        servername: account.imapHost,
-      } as any,
+        servername,
+      },
       greetingTimeout: 30000,
       socketTimeout: 60000,
     }
 
-    // 代理配置
-    if (proxyUrl) {
-      config.proxy = proxyUrl
-
-      // 使用 HTTP/HTTPS 代理时，必须使用域名而非 IP
-      // 这样代理才能正确建立 CONNECT 隧道
-      if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
-        config.host = account.imapHost
-      }
-    }
+    this.applyProxyConfig(config, proxyUrl, servername)
 
     return config
   }

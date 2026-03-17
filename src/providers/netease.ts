@@ -26,10 +26,27 @@ export class NeteaseMailProvider extends MailProviderAdapter {
   readonly displayName = '网易邮箱'
   readonly supportedDomains = ['163.com', '126.com', 'yeah.net']
 
-  getImapConfig(account: MailAccount, resolvedHost?: string, proxyUrl?: string) {
-    const config: any = {
-      host: resolvedHost || account.imapHost,
-      port: account.imapPort,
+  private resolveNeteaseDefaultHost(email: string): string {
+    const domain = email.split('@')[1]?.toLowerCase()
+    switch (domain) {
+      case '126.com':
+        return 'imap.126.com'
+      case 'yeah.net':
+        return 'imap.yeah.net'
+      case '163.com':
+      default:
+        return 'imap.163.com'
+    }
+  }
+
+  getImapConfig(account: MailAccount, resolvedHost?: string, proxyUrl?: string): Partial<ImapFlowOptions> {
+    const fallbackHost = this.resolveNeteaseDefaultHost(account.email)
+    const targetHost = this.resolveImapHost(account, resolvedHost, fallbackHost)
+    const servername = this.resolveServerName(account, fallbackHost)
+
+    const config: Partial<ImapFlowOptions> = {
+      host: targetHost,
+      port: account.imapPort || 993,
       secure: account.imapTls,
       auth: {
         user: account.email,
@@ -40,14 +57,11 @@ export class NeteaseMailProvider extends MailProviderAdapter {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2',
         // 始终设置 servername 以支持 TLS SNI
-        servername: account.imapHost,
-      } as any,
+        servername,
+      },
       greetingTimeout: 30000,
       socketTimeout: 60000,
-      // 关键配置：禁用 ImapFlow 的自动 IDLE，改用主动 NOOP 保活
-      // ImapFlow 默认会在空闲时进入 IDLE 模式，但网易的 IDLE 超时太短
-      // 通过设置较短的 idleTimeout，让 ImapFlow 更频繁地刷新 IDLE
-      idleTimeout: NETEASE_HEARTBEAT_INTERVAL,
+      // 网易邮箱 IDLE 超时较短，通过心跳机制在 provider features 中处理
     }
 
     // 网易邮箱需要发送 IMAP ID
@@ -55,13 +69,11 @@ export class NeteaseMailProvider extends MailProviderAdapter {
       config.clientInfo = {
         name: 'Koishi Mail Manager',
         version: '1.0.0',
-      }
+      } as ImapFlowOptions['clientInfo']
     }
 
     // 代理配置
-    if (proxyUrl) {
-      config.proxy = proxyUrl
-    }
+    this.applyProxyConfig(config, proxyUrl, servername)
 
     return config
   }
@@ -94,10 +106,12 @@ export class NeteaseMailProvider extends MailProviderAdapter {
   }
 
   getErrorHint(error: Error): string | null {
-    if (error.message.includes('AUTHENTICATIONFAILED')) {
+    const message = error.message.toLowerCase()
+
+    if (message.includes('authenticationfailed')) {
       return '认证失败，请检查邮箱密码或授权码是否正确'
     }
-    if (error.message.includes('Too many login failures')) {
+    if (message.includes('too many login failures')) {
       return '登录失败次数过多，请稍后再试'
     }
     return null

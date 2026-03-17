@@ -67,13 +67,14 @@ export class GmailProvider extends MailProviderAdapter {
 
   /** Gmail 专用 IP 选择策略 */
   private readonly ipStrategy = new GmailIpStrategy()
+  private readonly defaultHost = 'imap.gmail.com'
 
   getImapConfig(account: MailAccount, resolvedHost?: string, proxyUrl?: string): Partial<ImapFlowOptions> {
-    const isUsingProxy = !!proxyUrl
-    const targetHost = account.imapHost || 'imap.gmail.com'
+    const targetHost = this.resolveImapHost(account, resolvedHost, this.defaultHost)
+    const servername = this.resolveServerName(account, this.defaultHost)
 
-    const config: any = {
-      host: resolvedHost || targetHost,
+    const config: Partial<ImapFlowOptions> = {
+      host: targetHost,
       port: account.imapPort || 993,
       secure: true,
       auth: {
@@ -85,22 +86,13 @@ export class GmailProvider extends MailProviderAdapter {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2',
         // 使用代理时必须设置 servername 为域名（而非 IP）
-        servername: targetHost,
-      } as any,
+        servername,
+      },
       greetingTimeout: 30000,
       socketTimeout: 120000, // Gmail 建议更长的超时时间
     }
 
-    // 代理配置
-    if (proxyUrl) {
-      config.proxy = proxyUrl
-
-      // 使用 HTTP/HTTPS 代理时，需要确保 host 是域名而非 IP
-      // 这样代理可以正确处理 CONNECT 隧道
-      if (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://')) {
-        config.host = targetHost // 强制使用域名
-      }
-    }
+    this.applyProxyConfig(config, proxyUrl, servername)
 
     return config
   }

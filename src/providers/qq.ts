@@ -11,11 +11,15 @@ export class QQMailProvider extends MailProviderAdapter {
   readonly name = 'qq'
   readonly displayName = 'QQ邮箱'
   readonly supportedDomains = ['qq.com', 'foxmail.com', 'vip.qq.com']
+  private readonly defaultHost = 'imap.qq.com'
 
   getImapConfig(account: MailAccount, resolvedHost?: string, proxyUrl?: string): Partial<ImapFlowOptions> {
+    const targetHost = this.resolveImapHost(account, resolvedHost, this.defaultHost)
+    const servername = this.resolveServerName(account, this.defaultHost)
+
     const config: Partial<ImapFlowOptions> = {
-      host: resolvedHost || account.imapHost,
-      port: account.imapPort,
+      host: targetHost,
+      port: account.imapPort || 993,
       secure: account.imapTls,
       auth: {
         user: account.email,
@@ -26,15 +30,13 @@ export class QQMailProvider extends MailProviderAdapter {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2',
         // 始终设置 servername 以支持 TLS SNI
-        servername: account.imapHost,
-      } as any,
+        servername,
+      },
       greetingTimeout: 30000,
       socketTimeout: 60000,
     }
 
-    if (proxyUrl) {
-      config.proxy = proxyUrl
-    }
+    this.applyProxyConfig(config, proxyUrl, servername)
 
     return config
   }
@@ -59,10 +61,12 @@ export class QQMailProvider extends MailProviderAdapter {
   }
 
   getErrorHint(error: Error): string | null {
-    if (error.message.includes('AUTHENTICATIONFAILED')) {
+    const message = error.message.toLowerCase()
+
+    if (message.includes('authenticationfailed')) {
       return '认证失败，QQ邮箱需要使用授权码而非登录密码。请到 QQ邮箱设置 -> 账户 -> POP3/IMAP/SMTP服务 中生成授权码'
     }
-    if (error.message.includes('Too many simultaneous connections')) {
+    if (message.includes('too many simultaneous connections')) {
       return 'QQ邮箱同时连接数过多，请稍后再试'
     }
     return null

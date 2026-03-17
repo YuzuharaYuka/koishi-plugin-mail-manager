@@ -301,8 +301,6 @@ const pagination = reactive({
   total: 0,
   totalPages: 1
 })
-const jumpPage = ref(1)
-
 // 排序状态
 const sortKey = ref<string>('date')
 const sortOrder = ref<'asc' | 'desc'>('desc')
@@ -428,8 +426,6 @@ const loadMails = async () => {
     pagination.totalPages = Math.ceil(res.total / pagination.pageSize) || 1
   } catch (e) {
     console.error('Failed to load mails:', e)
-    // mock data if api fails (dev mode?)
-    // mails.value = []
   } finally {
     loading.value = false
   }
@@ -452,14 +448,6 @@ const goToPage = (page: number) => {
 const onPageSizeChange = () => {
   pagination.page = 1
   loadMails()
-}
-
-const handleJumpPage = () => {
-  if (jumpPage.value >= 1 && jumpPage.value <= pagination.totalPages) {
-    goToPage(jumpPage.value)
-  } else {
-    jumpPage.value = pagination.page
-  }
 }
 
 const openMailDetail = async (mail: StoredMail) => {
