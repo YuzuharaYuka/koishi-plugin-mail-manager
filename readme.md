@@ -48,7 +48,7 @@ npm install koishi-plugin-mail-manager
 | debug | boolean | false | 启用调试日志输出 |
 | encryptionKey | string | 自动生成 | 密码加密密钥 |
 | mailRetentionDays | number | 30 | 邮件保留天数，0 表示永久保留 |
-| autoCleanup | boolean | true | 自动清理过期邮件 |
+| autoCleanup | boolean | true | 自动清理过期邮件（启动后约 30 秒首轮，之后每 24 小时） |
 
 ### 连接设置
 
@@ -143,6 +143,12 @@ mail.cleanup [-e|-a] [-d]  清理邮件数据库
   -a, --all                  清理所有邮件
   -d, --dry-run             预览清理数量，不实际删除
 ```
+
+## 同步与清理行为说明
+
+- 同步会从服务器拉取邮件，并按 `messageId` 自动去重，避免重复入库。
+- 同步时会优先跳过本地已存在邮件，减少不必要的正文下载与解析。
+- 自动清理仅在 `autoCleanup=true` 且 `mailRetentionDays>0` 时执行；当保留天数为 0（永久保留）时不会清理。
 
 ## 许可证
 

@@ -152,7 +152,7 @@ export async function syncAccountMails(accountId: number, days?: number): Promis
 
   logger.info(LogModule.SYNC, `同步账号 ${accountId} (${account.email})`)
 
-  const existingMessageIds = await fetchExistingMessageIds(accountId)
+  const existingMessageIds = await fetchExistingMessageIds(accountId, days)
 
   let totalCount = 0
   let newCount = 0
@@ -163,9 +163,10 @@ export async function syncAccountMails(accountId: number, days?: number): Promis
       const { saved, skipped } = await processMailBatch(accountId, batchMails, existingMessageIds)
       newCount += saved
       existingCount += skipped
-    })
+    }, existingMessageIds)
 
     totalCount = result.total
+    existingCount += result.skippedExisting
     logger.info(LogModule.SYNC, `已同步邮件 ${totalCount} 封 (新增 ${newCount}, 已有 ${existingCount})`)
 
     return { total: totalCount, new: newCount, existing: existingCount }
@@ -202,14 +203,21 @@ function buildMailQueryConditions(query: MailListQuery): MailQueryConditions {
   return conditions
 }
 
-async function fetchExistingMessageIds(accountId: number): Promise<Set<string>> {
+async function fetchExistingMessageIds(accountId: number, days?: number): Promise<Set<string>> {
   const ctx = getContext()
   const logger = getLogger()
+
+  const conditions: MailQueryConditions = { accountId }
+  if (days && days > 0) {
+    const since = new Date()
+    since.setDate(since.getDate() - days)
+    conditions.receivedAt = { $gte: since }
+  }
 
   logger.debug(LogModule.SYNC, '正在加载已有邮件 ID...')
   const existingMails = await ctx.database
     .select(TABLE_MAILS, ['messageId'])
-    .where({ accountId })
+    .where(conditions)
     .execute()
 
   const ids = new Set(existingMails.map(m => m.messageId))

@@ -27,7 +27,7 @@ export const Config: Schema<Config> = Schema.intersect([
     mailRetentionDays: Schema.number().default(30).min(0)
       .description('保留天数 (0=永久)'),
     autoCleanup: Schema.boolean().default(true)
-      .description('自动清理过期邮件'),
+      .description('自动清理过期邮件（启动后约30秒首轮，之后每24小时）'),
   }).description('基础设置'),
 
   Schema.object({

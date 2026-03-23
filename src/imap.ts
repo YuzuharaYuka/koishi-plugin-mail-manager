@@ -254,23 +254,35 @@ export class ImapConnection {
    * @param days 同步最近 N 天的邮件（可选）
    * @param onBatch 批次处理回调
    */
-  async syncMails(days?: number, onBatch?: (mails: ParsedMail[]) => Promise<void>): Promise<{ total: number; synced: number }> {
+  async syncMails(
+    days?: number,
+    onBatch?: (mails: ParsedMail[]) => Promise<void>,
+    existingMessageIds?: Set<string>
+  ): Promise<{ total: number; synced: number; skippedExisting: number }> {
     this.assertConnected()
 
     return await this.withMailboxLock(async () => {
-      const uids = await this.findMailsToSync(days)
+      const allUids = await this.findMailsToSync(days)
 
-      if (uids.length === 0) {
+      if (allUids.length === 0) {
         logger.debug('%s 无邮件需同步', this.account.email)
-        return { total: 0, synced: 0 }
+        return { total: 0, synced: 0, skippedExisting: 0 }
       }
 
-      logger.debug('%s 发现 %d 封邮件需同步', this.account.email, uids.length)
+      const { candidates, skipped } = await this.filterExistingMailsByMessageId(allUids, existingMessageIds)
+      const uids = candidates
+
+      if (uids.length === 0) {
+        logger.debug('%s 待同步邮件均已存在', this.account.email)
+        return { total: allUids.length, synced: 0, skippedExisting: skipped }
+      }
+
+      logger.debug('%s 发现 %d/%d 封邮件需同步', this.account.email, uids.length, allUids.length)
 
       const result = await this.processMailSyncBatches(uids, onBatch)
       this.logSyncSummary(result, uids.length)
 
-      return { total: uids.length, synced: result.synced }
+      return { total: allUids.length, synced: result.synced, skippedExisting: skipped }
     })
   }
 
@@ -1050,6 +1062,57 @@ export class ImapConnection {
 
     const results = await this.imapFlow.search(criteria, { uid: true })
     return results || []
+  }
+
+  private async filterExistingMailsByMessageId(
+    uids: number[],
+    existingMessageIds?: Set<string>
+  ): Promise<{ candidates: number[]; skipped: number }> {
+    if (!this.imapFlow || !existingMessageIds || existingMessageIds.size === 0) {
+      return { candidates: uids, skipped: 0 }
+    }
+
+    const candidates: number[] = []
+    let skipped = 0
+    const PREFILTER_CONCURRENCY = 8
+
+    for (let i = 0; i < uids.length; i += PREFILTER_CONCURRENCY) {
+      const chunk = uids.slice(i, i + PREFILTER_CONCURRENCY)
+      const messageIds = await Promise.all(chunk.map(uid => this.fetchMessageId(uid)))
+
+      for (let j = 0; j < chunk.length; j++) {
+        const uid = chunk[j]
+        const messageId = messageIds[j]
+        if (messageId && existingMessageIds.has(messageId)) {
+          skipped++
+          continue
+        }
+        candidates.push(uid)
+      }
+    }
+
+    if (skipped > 0) {
+      logger.debug('%s 预过滤已存在邮件 %d 封，剩余 %d 封待拉取', this.account.email, skipped, candidates.length)
+    }
+
+    return { candidates, skipped }
+  }
+
+  private async fetchMessageId(uid: number): Promise<string | null> {
+    if (!this.imapFlow) return null
+
+    try {
+      const summary = await withTimeout(
+        this.imapFlow.fetchOne(String(uid), { envelope: true }, { uid: true }),
+        5000,
+        null
+      )
+
+      if (!summary) return null
+      return summary.envelope?.messageId || null
+    } catch {
+      return null
+    }
   }
 
   private async processMailSyncBatches(

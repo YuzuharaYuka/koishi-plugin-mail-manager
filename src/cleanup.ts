@@ -35,11 +35,14 @@ export async function cleanExpiredMails(
   const expirationThreshold = new Date()
   expirationThreshold.setDate(expirationThreshold.getDate() - retentionDays)
   const condition = { receivedAt: { $lt: expirationThreshold } }
+  const needCountScan = dryRun || !!reportProgress
 
-  // 仅统计，不加载邮件数据到内存
-  const expiredMailCount = await ctx.database.eval('mail_manager.mails', row => $.count(row.id), condition) as number
-
-  if (!expiredMailCount) return 0
+  let expiredMailCount = 0
+  if (needCountScan) {
+    // 仅统计，不加载邮件数据到内存
+    expiredMailCount = await ctx.database.eval('mail_manager.mails', row => $.count(row.id), condition) as number
+    if (!expiredMailCount) return 0
+  }
 
   if (dryRun) return expiredMailCount
 
@@ -86,24 +89,37 @@ export async function cleanExpiredMails(
 /** 自动清理任务的执行间隔：24 小时 */
 const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000
 
+let cleanupRunning = false
+
 /**
  * 注册自动清理定时任务
  * 插件启动 30 秒后执行首次清理，此后每 24 小时执行一次。
  */
 export function scheduleAutoCleanup(ctx: Context, config: { autoCleanup: boolean; mailRetentionDays: number }) {
-  if (!config.autoCleanup || config.mailRetentionDays <= 0) return
+  if (!config.autoCleanup) return
+
+  if (config.mailRetentionDays <= 0) {
+    logger.info('[自动清理] 已启用但保留天数为 0，自动清理不会执行')
+    return
+  }
 
   const runCleanup = async () => {
+    if (cleanupRunning) {
+      logger.debug('[自动清理] 上一次任务仍在执行，跳过本轮')
+      return
+    }
+
+    cleanupRunning = true
     try {
       logger.debug('[自动清理] 开始...')
-      const deletedCount = await cleanExpiredMails(ctx, config.mailRetentionDays, {
-        reportProgress: async (msg) => logger.debug(`[自动清理] ${msg}`),
-      })
+      const deletedCount = await cleanExpiredMails(ctx, config.mailRetentionDays)
       if (deletedCount > 0) {
         logger.info(`[自动清理] 已删除 ${deletedCount} 封过期邮件`)
       }
     } catch (error) {
       logger.error(`[自动清理] 失败: ${(error as Error).message}`)
+    } finally {
+      cleanupRunning = false
     }
   }
 

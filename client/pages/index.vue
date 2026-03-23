@@ -80,20 +80,17 @@ const loadStats = async () => {
   }
 }
 
-let refreshInterval: NodeJS.Timeout | null = null
+// 在 setup 顶层注册，账号状态变化时实时更新顶部统计
+receive('mail-manager/account-status-changed', () => {
+  loadStats()
+})
+
+let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   loadStats()
-
-  // 监听账号状态变化，实时更新统计（Vue 会自动清理监听器）
-  receive('mail-manager/account-status-changed', () => {
-    loadStats()
-  })
-
-  // 每30秒刷新一次统计（防止遗漏事件）
-  refreshInterval = setInterval(() => {
-    loadStats()
-  }, 30000)
+  // 每 30 秒兜底刷新，防止遗漏推送事件
+  refreshInterval = setInterval(loadStats, 30000)
 })
 
 onUnmounted(() => {

@@ -122,7 +122,7 @@
           <div v-else>
             <p class="sync-tip">
               <Icon name="lightbulb" />
-              从邮箱服务器重新获取邮件。可用于恢复被删除的邮件。
+              从邮箱服务器重新获取邮件。可用于恢复本地已删除、但服务器仍保留的邮件。
             </p>
             <div class="sync-warning">
               <Icon name="info" />
@@ -153,7 +153,7 @@
             </div>
             <div class="ml-help">
               <Icon name="info" />
-              系统会自动去重，只保存新邮件。同步期间请勿关闭页面。
+              系统会按 Message-ID 自动去重并优先跳过已存在邮件。同步期间请勿关闭页面。
             </div>
           </div>
         </div>
@@ -209,20 +209,19 @@ const loadAccounts = async () => {
   }
 }
 
-// 处理账号状态变化事件
-const handleStatusChange = (data: { accountId: number; status: string; error?: string }) => {
+// 在 setup 顶层注册监听，确保 Vue 正确绑定生命周期并及时接收事件
+// 处理账号状态变化推送
+receive('mail-manager/account-status-changed', (data: { accountId: number; status: string; error?: string | null }) => {
   const account = accounts.value.find(a => a.id === data.accountId)
   if (account) {
     account.status = data.status as MailAccount['status']
-    if (data.error) {
-      account.lastError = data.error
-    } else {
-      account.lastError = undefined
-    }
-    // 通知父组件更新统计（已连接数量可能变化）
+    account.lastError = data.error || undefined
     emit('refresh')
+  } else {
+    // 账号不在列表中（如新建账号时的竞态），重新加载以同步最新状态
+    loadAccounts().then(() => emit('refresh'))
   }
-}
+})
 
 // 同步相关状态
 const showSyncModal = ref(false)
@@ -329,12 +328,6 @@ const deleteAccount = async (account: MailAccount) => {
 
 onMounted(() => {
   loadAccounts()
-
-  // 监听状态变化事件
-  // receive 函数会自动在组件卸载时清理监听器
-  receive('mail-manager/account-status-changed', (data) => {
-    handleStatusChange(data)
-  })
 })
 
 </script>
