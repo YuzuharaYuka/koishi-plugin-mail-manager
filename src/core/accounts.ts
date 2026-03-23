@@ -18,11 +18,12 @@ import {
   TABLE_MAILS,
   activeConnections,
   accountOperationLocks,
+  getCurrentInstanceId,
   getContext,
   getConfig,
+  getNewMailHandler,
   getLogger,
 } from './state'
-import { handleNewMail } from './forward'
 
 // ============ 账号查询 ============
 
@@ -134,10 +135,42 @@ export async function testConnection(id: number): Promise<ConnectionTestResult> 
   }
 }
 
+export async function testConnectionWithConfig(data: Partial<CreateMailAccountRequest>): Promise<ConnectionTestResult> {
+  const email = data.email?.trim() || ''
+  const password = data.password || ''
+  const imapHost = data.imapHost?.trim() || ''
+
+  if (!email || !password || !imapHost) {
+    return { success: false, message: '测试连接需要邮箱地址、授权码/密码和 IMAP 服务器' }
+  }
+
+  const tempAccount: Partial<MailAccount> = {
+    name: data.name || '临时测试账号',
+    email,
+    password,
+    imapHost,
+    imapPort: data.imapPort ?? 993,
+    imapTls: data.imapTls ?? true,
+    proxyUrl: data.proxyUrl || undefined,
+  }
+
+  const result = await ImapConnection.testConnection(tempAccount)
+
+  return {
+    ...result,
+    details: {
+      host: imapHost,
+      port: tempAccount.imapPort!,
+      tls: tempAccount.imapTls!,
+    },
+  }
+}
+
 export async function connectAccount(id: number): Promise<void> {
   const ctx = getContext()
   const config = getConfig()
   const logger = getLogger()
+  const ownerInstanceId = getCurrentInstanceId()
 
   const account = await getAccount(id)
   if (!account) {
@@ -156,8 +189,15 @@ export async function connectAccount(id: number): Promise<void> {
     throw new Error(errorMsg)
   }
 
+  // 检查旧连接是否已达到终止状态，如果是则清理
+  const existingConnection = activeConnections.get(id)
+  if (existingConnection && existingConnection.isTerminallyFailed()) {
+    logger.debug(LogModule.CONNECT, `账号 ${id} 的旧连接已终止，将其从 map 中移除并创建新连接`)
+    activeConnections.delete(id)
+  }
+
   if (activeConnections.has(id)) {
-    logger.debug(LogModule.CONNECT, `账号 ${id} 已连接`)
+    logger.debug(LogModule.CONNECT, `账号 ${id} 已连接或正在重连`)
     return
   }
 
@@ -166,18 +206,34 @@ export async function connectAccount(id: number): Promise<void> {
     account,
     {
       mailRetentionDays: config.mailRetentionDays,
-      autoReconnect: config.autoReconnect,
       maxReconnectAttempts: config.maxReconnectAttempts,
-      reconnectInterval: config.reconnectInterval,
+      reconnectBaseInterval: config.reconnectBaseInterval,
+      fastReconnectAttempts: config.fastReconnectAttempts,
+      fastReconnectInterval: config.fastReconnectInterval,
+      reconnectMaxInterval: config.reconnectMaxInterval,
+      reconnectJitterRatio: config.reconnectJitterRatio,
       connectionTimeout: config.connectionTimeout,
-      healthCheckEnabled: config.healthCheckEnabled,
       healthCheckInterval: config.healthCheckInterval,
-      enableConnectivityTest: config.enableConnectivityTest,
       connectivityTestTimeout: config.connectivityTestTimeout,
     },
-    // 直接使用导入的 handleNewMail，esbuild 打包后循环依赖会被解决
-    (mail) => handleNewMail(id, mail),
-    (status, error) => updateAccountStatus(id, status, error)
+    // 通过 state 注入的处理器转发新邮件，避免与 forward 静态循环依赖
+    async (mail) => {
+      if (getCurrentInstanceId() !== ownerInstanceId) {
+        return
+      }
+      const handler = getNewMailHandler()
+      if (!handler) {
+        logger.warn(LogModule.MAIL, `新邮件处理器未初始化，跳过邮件: ${account.email}`)
+        return
+      }
+      await handler(id, mail)
+    },
+    (status, error) => {
+      if (getCurrentInstanceId() !== ownerInstanceId) {
+        return
+      }
+      updateAccountStatus(id, status, error)
+    }
   )
 
   activeConnections.set(id, connection)
@@ -185,8 +241,17 @@ export async function connectAccount(id: number): Promise<void> {
   try {
     await connection.connect()
   } catch (error) {
-    activeConnections.delete(id)
-    throw error
+    // 注意：不要删除连接！
+    // ImapConnection 会内部管理重连逻辑，即使初始连接失败，
+    // 它还会尝试自动重连。删除它会导致：
+    // 1. 后续 connectAccount() 调用会创建新实例（重复连接）
+    // 2. 重连计数重置，导致日志中出现"第 1/10 次"而不是递增
+    //
+    // 只有当连接达到终止状态（disposed 或超过最大重连次数）时才删除。
+    // 在下次调用 connectAccount() 时，会通过 isTerminallyFailed() 检查来清理。
+    logger.debug(LogModule.CONNECT, `账号 ${id} 初始连接失败，由内部重连逻辑接管: ${(error as Error).message}`)
+    // 连接实例会通过 handleConnectionFailure() 触发内部重连
+    // 不再 throw error，让调用者知道连接已在处理状态中
   }
 }
 
@@ -280,8 +345,16 @@ async function handleAccountStateChange(
 }
 
 export async function updateAccountStatus(id: number, status: MailAccount['status'], error?: string): Promise<void> {
-  const ctx = getContext()
-  const logger = getLogger()
+  let ctx: ReturnType<typeof getContext>
+  let logger: ReturnType<typeof getLogger>
+
+  try {
+    ctx = getContext()
+    logger = getLogger()
+  } catch {
+    // 卸载/热重载窗口期允许静默跳过，避免旧实例回调抛错。
+    return
+  }
 
   try {
     await ctx.database.set(TABLE_ACCOUNTS, { id }, {

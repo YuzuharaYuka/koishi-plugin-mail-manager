@@ -9,6 +9,7 @@ import type { Config, ForwardRule } from '../types'
 import type { ImapConnection } from '../imap'
 import type { MailRenderer } from '../render'
 import type { MailManagerLogger } from '../logger'
+import type { ParsedMail } from '../parser'
 
 // ============ 常量定义 ============
 
@@ -68,6 +69,9 @@ export const rulesCache = {
   queryPromise: null as Promise<ForwardRule[]> | null,
 }
 
+/** 新邮件处理器（由 core 初始化时注入） */
+let _newMailHandler: ((accountId: number, mail: ParsedMail) => Promise<void> | void) | null = null
+
 // ============ 状态访问器 ============
 
 export function getContext(): Context {
@@ -106,6 +110,14 @@ export function setDebugMode(enabled: boolean): void {
   _isDebugMode = enabled
 }
 
+export function setNewMailHandler(handler: (accountId: number, mail: ParsedMail) => Promise<void> | void): void {
+  _newMailHandler = handler
+}
+
+export function getNewMailHandler(): ((accountId: number, mail: ParsedMail) => Promise<void> | void) | null {
+  return _newMailHandler
+}
+
 // ============ 初始化 ============
 
 /**
@@ -133,6 +145,8 @@ export function clearState(): void {
   rulesCache.data = null
   rulesCache.lastUpdate = 0
   rulesCache.queryPromise = null
+  _currentInstanceId = 0
+  _newMailHandler = null
   _context = null
   _pluginConfig = null
   _logger = null

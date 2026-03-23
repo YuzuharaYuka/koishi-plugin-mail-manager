@@ -5,138 +5,161 @@
         <span class="ml-modal-title">{{ isEditing ? '编辑账号' : '添加账号' }}</span>
         <button class="ml-modal-close" @click="closeModal"><Icon name="close" /></button>
       </div>
+
       <div class="ml-modal-body">
-        <!-- 错误提示 -->
         <div v-if="formError" class="form-error">
           <Icon name="alert" /> {{ formError }}
         </div>
 
-        <div class="ml-form-group">
-          <label class="ml-label">名称 <span class="required">*</span></label>
-          <input
-            v-model="formData.name"
-            class="ml-input"
-            :class="{ 'has-error': !formData.name && formTouched.name }"
-            placeholder="用于标识的名称（如：工作邮箱）"
-            @blur="formTouched.name = true"
-          />
-        </div>
-
-        <!-- 邮箱服务商快速选择 -->
-        <div class="ml-form-group">
-          <label class="ml-label">邮箱服务商</label>
-          <Select
-            v-model="selectedProvider"
-            :options="providerOptions"
-            placeholder="选择服务商自动填充配置"
-            @change="onProviderChange"
-          />
-        </div>
-
-        <div class="ml-form-group">
-          <label class="ml-label">邮箱地址 <span class="required">*</span></label>
-          <input
-            v-model="formData.email"
-            class="ml-input"
-            :class="{ 'has-error': !formData.email && formTouched.email }"
-            type="email"
-            placeholder="example@mail.com"
-            @blur="formTouched.email = true"
-            @input="autoFillImapHost"
-          />
-        </div>
-
-        <div class="ml-form-group">
-          <label class="ml-label">密码/授权码 <span v-if="!isEditing" class="required">*</span></label>
-          <div class="password-input-wrapper">
+        <div class="form-section">
+          <div class="section-title"><Icon name="user" /> 基本信息</div>
+          <div class="ml-form-group">
+            <label class="ml-label">名称 <span class="required">*</span></label>
             <input
-              v-model="formData.password"
+              v-model="formData.name"
               class="ml-input"
-              :class="{ 'has-error': !isEditing && !formData.password && formTouched.password }"
-              :type="showPassword ? 'text' : 'password'"
-              :placeholder="isEditing ? '留空则保持原密码不变' : '授权码（非登录密码）'"
-              @blur="formTouched.password = true"
+              :class="{ 'has-error': !formData.name && formTouched.name }"
+              placeholder="用于标识的名称（如：工作邮箱）"
+              @blur="formTouched.name = true"
             />
-            <button class="toggle-password-btn" @click="showPassword = !showPassword" tabindex="-1">
-              <Icon :name="showPassword ? 'eye' : 'eye-off'" />
+          </div>
+
+          <div class="ml-form-group">
+            <label class="ml-label">邮箱地址 <span class="required">*</span></label>
+            <input
+              v-model="formData.email"
+              class="ml-input"
+              :class="{ 'has-error': !formData.email && formTouched.email }"
+              type="email"
+              placeholder="example@mail.com"
+              @blur="formTouched.email = true"
+              @input="autoFillImapHost"
+            />
+          </div>
+
+          <div class="ml-form-group">
+            <label class="ml-label">邮箱服务商</label>
+            <Select
+              v-model="selectedProvider"
+              :options="providerOptions"
+              placeholder="选择服务商自动填充配置"
+              @change="onProviderChange"
+            />
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="section-title"><Icon name="network" /> 连接参数</div>
+          <div class="ml-form-group">
+            <label class="ml-label">IMAP 服务器 <span class="required">*</span></label>
+            <div class="server-input-row">
+              <input
+                v-model="formData.imapHost"
+                class="ml-input"
+                :class="{ 'has-error': !formData.imapHost && formTouched.imapHost }"
+                placeholder="imap.example.com"
+                @blur="formTouched.imapHost = true"
+              />
+              <Select
+                v-model="quickServerSelect"
+                :options="quickServerOptions"
+                placeholder="快速选择"
+                size="small"
+                @change="onQuickServerSelect"
+              />
+            </div>
+          </div>
+
+          <div class="ml-form-row">
+            <div class="ml-form-group port-group">
+              <label class="ml-label">端口</label>
+              <Select
+                v-model="formData.imapPort"
+                :options="portOptions"
+                placeholder="选择端口"
+              />
+            </div>
+
+            <div class="ml-form-group switch-group">
+              <label class="ml-label">TLS 加密</label>
+              <div class="switch-wrapper">
+                <label class="ml-switch">
+                  <input v-model="formData.imapTls" type="checkbox" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="ml-form-group switch-group">
+              <label class="ml-label">启用</label>
+              <div class="switch-wrapper">
+                <label class="ml-switch">
+                  <input v-model="formData.enabled" type="checkbox" />
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="ml-form-group">
+            <label class="ml-label">代理服务器（可选）</label>
+            <input
+              v-model="formData.proxyUrl"
+              class="ml-input"
+              placeholder="如: socks5://127.0.0.1:6780"
+            />
+            <div v-if="selectedProviderInfo?.needsProxy" class="ml-help warning">
+              <Icon name="alert" />
+              {{ selectedProviderInfo.proxyHint || '此邮箱服务可能需要代理才能连接' }}
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <div class="section-title"><Icon name="settings" /> 认证与校验</div>
+
+          <div class="ml-form-group">
+            <label class="ml-label">密码/授权码 <span v-if="!isEditing" class="required">*</span></label>
+            <div class="password-input-wrapper">
+              <input
+                v-model="formData.password"
+                class="ml-input"
+                :class="{ 'has-error': !isEditing && !formData.password && formTouched.password }"
+                :type="showPassword ? 'text' : 'password'"
+                :placeholder="isEditing ? '留空则保持原密码不变；测试连接需填写' : '授权码（非登录密码）'"
+                @blur="formTouched.password = true"
+              />
+              <button class="toggle-password-btn" @click="showPassword = !showPassword" tabindex="-1" type="button">
+                <Icon :name="showPassword ? 'eye' : 'eye-off'" />
+              </button>
+            </div>
+
+            <div v-if="selectedProviderInfo" class="auth-guide">
+              <Icon name="info" />
+              <span>{{ selectedProviderInfo.authGuide }}</span>
+              <a v-if="selectedProviderInfo.helpUrl" :href="selectedProviderInfo.helpUrl" target="_blank" class="guide-link">
+                查看教程 <Icon name="external-link" />
+              </a>
+            </div>
+            <div v-else class="ml-help"><Icon name="lightbulb" /> 大部分邮箱需要使用授权码，而非登录密码</div>
+          </div>
+
+          <div class="test-box" :class="{ success: testSuccess === true, failed: testSuccess === false }">
+            <div class="test-info">
+              <Icon :name="testSuccess === true ? 'check' : testSuccess === false ? 'alert-circle' : 'activity'" />
+              <span v-if="testSuccess === null">建议保存前先测试连接，避免无效配置反复重连。</span>
+              <span v-else>{{ testMessage }}</span>
+            </div>
+            <button class="ml-btn" type="button" @click="testConnectionWithForm" :disabled="testing || !canTestConfig">
+              {{ testing ? '测试中...' : '测试连接' }}
             </button>
-          </div>
-          <!-- 授权码获取指引 -->
-          <div v-if="selectedProviderInfo" class="auth-guide">
-            <Icon name="info" />
-            <span>{{ selectedProviderInfo.authGuide }}</span>
-            <a v-if="selectedProviderInfo.helpUrl" :href="selectedProviderInfo.helpUrl" target="_blank" class="guide-link">
-              查看教程 <Icon name="external-link" />
-            </a>
-          </div>
-          <div v-else class="ml-help"><Icon name="lightbulb" /> 大部分邮箱需要使用授权码，而非登录密码</div>
-        </div>
-
-        <div class="ml-form-group">
-          <label class="ml-label">代理服务器（可选）</label>
-          <input
-            v-model="formData.proxyUrl"
-            class="ml-input"
-            placeholder="如: socks5://127.0.0.1:6780"
-          />
-          <div v-if="selectedProviderInfo?.needsProxy" class="ml-help warning">
-            <Icon name="alert" />
-            {{ selectedProviderInfo.proxyHint || '此邮箱服务可能需要代理才能连接' }}
-          </div>
-        </div>
-
-        <div class="ml-form-group">
-          <label class="ml-label">IMAP 服务器 <span class="required">*</span></label>
-          <div class="server-input-row">
-            <input
-              v-model="formData.imapHost"
-              class="ml-input"
-              :class="{ 'has-error': !formData.imapHost && formTouched.imapHost }"
-              placeholder="imap.example.com"
-              @blur="formTouched.imapHost = true"
-            />
-            <Select
-              v-model="quickServerSelect"
-              :options="quickServerOptions"
-              placeholder="快速选择"
-              size="small"
-              @change="onQuickServerSelect"
-            />
-          </div>
-        </div>
-
-        <div class="ml-form-row">
-          <div class="ml-form-group port-group">
-            <label class="ml-label">端口</label>
-            <Select
-              v-model="formData.imapPort"
-              :options="portOptions"
-              placeholder="选择端口"
-            />
-          </div>
-          <div class="ml-form-group">
-            <label class="ml-label">TLS 加密</label>
-            <div class="switch-wrapper">
-              <label class="ml-switch">
-                <input v-model="formData.imapTls" type="checkbox" />
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-          <div class="ml-form-group">
-            <label class="ml-label">启用</label>
-            <div class="switch-wrapper">
-              <label class="ml-switch">
-                <input v-model="formData.enabled" type="checkbox" />
-                <span class="slider"></span>
-              </label>
-            </div>
           </div>
         </div>
       </div>
+
       <div class="ml-modal-footer">
-        <button class="ml-btn" @click="closeModal">取消</button>
-        <button class="ml-btn primary" @click="saveAccount" :disabled="saving || !isFormValid">
+        <button class="ml-btn" @click="closeModal" :disabled="saving || testing">取消</button>
+        <button class="ml-btn primary" @click="saveAccount" :disabled="saving || testing || !isFormValid">
           {{ saving ? '保存中...' : '保存' }}
         </button>
       </div>
@@ -211,7 +234,7 @@ const emailProviders: Record<string, ProviderConfig> = {
     authGuide: '请先开启两步验证，然后创建应用专用密码作为授权码使用',
     helpUrl: 'https://support.google.com/accounts/answer/185833',
     needsProxy: true,
-    proxyHint: 'Gmail 在中国大陆地区需要配置代理才能连接'
+    proxyHint: 'Gmail 可能需要配置代理'
   },
   outlook: {
     name: 'Outlook / Hotmail',
@@ -222,7 +245,7 @@ const emailProviders: Record<string, ProviderConfig> = {
     authGuide: '请在 Microsoft 账户「安全 > 应用密码」中创建应用密码',
     helpUrl: 'https://support.microsoft.com/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944',
     needsProxy: true,
-    proxyHint: 'Outlook 在部分地区可能需要配置代理'
+    proxyHint: 'Outlook 可能需要配置代理'
   },
   yahoo: {
     name: 'Yahoo Mail',
@@ -318,8 +341,11 @@ const imapHostMap: Record<string, string> = {
 }
 
 const saving = ref(false)
+const testing = ref(false)
 const showPassword = ref(false)
 const formError = ref('')
+const testMessage = ref('')
+const testSuccess = ref<boolean | null>(null)
 const selectedProvider = ref('')
 const quickServerSelect = ref('')
 
@@ -348,6 +374,8 @@ const formData = reactive({
   enabled: false,
   proxyUrl: '',
 })
+
+const shouldForceTls = (port: number) => port === 993 || port === 465
 
 // 初始化表单
 watch(() => props.visible, (newVal) => {
@@ -379,8 +407,23 @@ watch(() => props.visible, (newVal) => {
       })
       selectedProvider.value = ''
     }
+
+    testMessage.value = ''
+    testSuccess.value = null
   }
 })
+
+watch(() => formData.imapPort, (port) => {
+  formData.imapTls = shouldForceTls(port)
+})
+
+watch(
+  () => [formData.email, formData.password, formData.imapHost, formData.imapPort, formData.imapTls, formData.proxyUrl],
+  () => {
+    testSuccess.value = null
+    testMessage.value = ''
+  }
+)
 
 const resetForm = () => {
   formTouched.name = false
@@ -415,6 +458,42 @@ const onProviderChange = (value: string) => {
     formData.imapHost = config.imapHost
     formData.imapPort = config.imapPort
     formData.imapTls = config.imapTls
+  }
+}
+
+const canTestConfig = computed(() => {
+  return !!(formData.email && formData.imapHost && formData.password)
+})
+
+const testConnectionWithForm = async () => {
+  formError.value = ''
+  testMessage.value = ''
+
+  if (!canTestConfig.value) {
+    testSuccess.value = false
+    testMessage.value = '测试连接需要填写邮箱地址、IMAP 服务器和密码/授权码。'
+    return
+  }
+
+  testing.value = true
+  try {
+    const result = await accountApi.testTemp({
+      name: formData.name,
+      email: formData.email,
+      password: formData.password,
+      imapHost: formData.imapHost,
+      imapPort: formData.imapPort,
+      imapTls: formData.imapTls,
+      proxyUrl: formData.proxyUrl,
+    })
+
+    testSuccess.value = result.success
+    testMessage.value = result.success ? '连接测试成功，可以安全保存。' : `连接测试失败：${result.message}`
+  } catch (e) {
+    testSuccess.value = false
+    testMessage.value = `连接测试失败：${(e as Error).message}`
+  } finally {
+    testing.value = false
   }
 }
 
@@ -463,6 +542,11 @@ const saveAccount = async () => {
     return
   }
 
+  if (testSuccess.value !== true && canTestConfig.value) {
+    const confirmed = confirm('当前配置未通过连接测试，仍要保存吗？')
+    if (!confirmed) return
+  }
+
   formError.value = ''
   saving.value = true
   try {
@@ -489,7 +573,25 @@ const saveAccount = async () => {
 <style scoped>
 .account-modal {
   width: 100%;
-  max-width: 520px;
+  max-width: 640px;
+}
+
+.form-section {
+  border: 1px solid var(--ml-border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+  background: var(--ml-bg-base);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ml-text-secondary);
+  margin-bottom: 10px;
 }
 
 .form-error {
@@ -530,6 +632,37 @@ const saveAccount = async () => {
 
 .ml-help.warning :deep(.icon) {
   color: var(--ml-warning);
+}
+
+.test-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ml-border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--ml-bg-container);
+}
+
+.test-box.success {
+  border-color: rgba(82, 196, 26, 0.45);
+  background: rgba(82, 196, 26, 0.08);
+}
+
+.test-box.failed {
+  border-color: rgba(255, 77, 79, 0.45);
+  background: rgba(255, 77, 79, 0.08);
+}
+
+.test-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ml-text-secondary);
+  line-height: 1.5;
 }
 
 .auth-guide {
@@ -588,6 +721,10 @@ const saveAccount = async () => {
   max-width: 200px;
 }
 
+.switch-group {
+  min-width: 88px;
+}
+
 .switch-wrapper {
   padding-top: 8px;
 }
@@ -640,5 +777,24 @@ const saveAccount = async () => {
 .ml-modal-close :deep(.icon) {
   width: 1.2em;
   height: 1.2em;
+}
+
+@media (max-width: 720px) {
+  .account-modal {
+    max-width: 96vw;
+  }
+
+  .test-box {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .server-input-row {
+    flex-direction: column;
+  }
+
+  .server-input-row .ml-select-wrapper {
+    width: 100%;
+  }
 }
 </style>

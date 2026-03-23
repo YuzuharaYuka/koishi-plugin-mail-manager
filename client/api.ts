@@ -46,6 +46,10 @@ export const accountApi = {
   /** 测试连接 */
   test: (id: number) => call<ConnectionTestResult>('mail-manager/accounts/test', id),
 
+  /** 用当前表单配置测试连接（无需先保存账号） */
+  testTemp: (data: Partial<MailAccount>) =>
+    call<ConnectionTestResult>('mail-manager/accounts/test-temp', data),
+
   /** 连接账号 */
   connect: (id: number) => call<void>('mail-manager/accounts/connect', id),
 

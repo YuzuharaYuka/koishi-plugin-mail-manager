@@ -56,6 +56,12 @@ export async function parseMail(source: Buffer | Uint8Array): Promise<ParsedMail
   }
 }
 
+function normalizeTextContent(text?: string): string | undefined {
+  if (!text) return undefined
+  const normalized = text.replace(/\r\n/g, '\n').trim()
+  return normalized.length > 0 ? normalized : undefined
+}
+
 /**
  * 解析邮件日期字符串
  * 支持多种常见日期格式，增强兼容性
@@ -163,6 +169,8 @@ export function parseMailDate(dateStr: string | undefined | null): Date | undefi
 async function parseWithPostalMime(source: Buffer | Uint8Array): Promise<ParsedMail> {
   const parser = new PostalMime()
   const email = await parser.parse(source)
+  const htmlContent = typeof email.html === 'string' ? email.html : undefined
+  const textContent = normalizeTextContent(typeof email.text === 'string' ? email.text : undefined)
 
   let parsedDate = email.date ? parseMailDate(email.date) : undefined
 
@@ -198,8 +206,8 @@ async function parseWithPostalMime(source: Buffer | Uint8Array): Promise<ParsedM
     cc: parsePostalAddressList(email.cc),
     bcc: parsePostalAddressList(email.bcc),
     replyTo: parsePostalAddressList(email.replyTo),
-    text: email.text || undefined,
-    html: email.html || undefined,
+    text: textContent || (htmlContent ? normalizeTextContent(htmlToText(htmlContent)) : undefined),
+    html: htmlContent,
     attachments: parsePostalAttachments(email.attachments),
   }
 }
@@ -209,11 +217,13 @@ async function parseWithMailparser(source: Buffer | Uint8Array): Promise<ParsedM
   // simpleParser 只接受 Buffer 类型
   const buffer = source instanceof Buffer ? source : Buffer.from(source)
   const parsed = await simpleParser(buffer, {
-    skipHtmlToText: true,
     skipTextToHtml: true,
     skipImageLinks: true,
     skipTextLinks: true,
   })
+
+  const htmlContent = typeof parsed.html === 'string' ? parsed.html : undefined
+  const textContent = normalizeTextContent(parsed.text || undefined)
 
   return {
     messageId: parsed.messageId || undefined,
@@ -224,8 +234,8 @@ async function parseWithMailparser(source: Buffer | Uint8Array): Promise<ParsedM
     cc: parseMailparserAddressList(parsed.cc),
     bcc: parseMailparserAddressList(parsed.bcc),
     replyTo: parseMailparserAddressList(parsed.replyTo),
-    text: parsed.text || undefined,
-    html: parsed.html || undefined,
+    text: textContent || (htmlContent ? normalizeTextContent(htmlToText(htmlContent)) : undefined),
+    html: htmlContent,
     attachments: parseMailparserAttachments(parsed.attachments),
   }
 }

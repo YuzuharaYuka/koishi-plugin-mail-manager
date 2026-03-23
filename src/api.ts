@@ -77,6 +77,10 @@ class ApiRegistrar {
 
     this.addListener('mail-manager/accounts/test', (id: number) => core.testConnection(id))
 
+    this.addListener('mail-manager/accounts/test-temp', (data: Partial<CreateMailAccountRequest>) =>
+      core.testConnectionWithConfig(data)
+    )
+
     this.addListener('mail-manager/accounts/connect', (id: number) => core.connectAccount(id))
 
     this.addListener('mail-manager/accounts/disconnect', (id: number) => core.disconnectAccount(id))

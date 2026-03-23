@@ -22,6 +22,7 @@ export {
   updateAccount,
   deleteAccount,
   testConnection,
+  testConnectionWithConfig,
   connectAccount,
   disconnectAccount,
   updateAccountStatus,

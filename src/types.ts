@@ -585,6 +585,7 @@ declare module '@koishijs/plugin-console' {
     'mail-manager/accounts/update'(id: number, data: UpdateMailAccountRequest): Promise<MailAccount>
     'mail-manager/accounts/delete'(id: number): Promise<void>
     'mail-manager/accounts/test'(id: number): Promise<ConnectionTestResult>
+    'mail-manager/accounts/test-temp'(data: Partial<CreateMailAccountRequest>): Promise<ConnectionTestResult>
     'mail-manager/accounts/connect'(id: number): Promise<void>
     'mail-manager/accounts/disconnect'(id: number): Promise<void>
     'mail-manager/accounts/sync'(id: number, days?: number): Promise<{ total: number; new: number; existing: number }>

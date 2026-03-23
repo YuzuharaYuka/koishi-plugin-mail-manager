@@ -17,6 +17,7 @@ import { DEFAULT_FORWARD_ELEMENTS, DEFAULT_RENDER_CONFIG } from '../render'
 import { sleep } from '../utils'
 import {
   activeConnections,
+  getConfig,
   getContext,
   getLogger,
   getMailRenderer,
@@ -403,6 +404,7 @@ function findBot(platform: string, selfId: string): Bot | undefined {
  */
 export async function startAllConnections(): Promise<void> {
   const ctx = getContext()
+  const config = getConfig()
   const logger = getLogger()
 
   const accounts = await ctx.database.get('mail_manager.accounts', { enabled: true })
@@ -414,8 +416,12 @@ export async function startAllConnections(): Promise<void> {
 
   logger.info(LogModule.IMAP, `连接 ${accounts.length} 个邮箱账户...`)
 
-  for (const account of accounts) {
+  for (let i = 0; i < accounts.length; i++) {
+    const account = accounts[i]
     try {
+      if (i > 0 && config.startupConnectStagger > 0) {
+        await sleep(config.startupConnectStagger)
+      }
       logger.debug(LogModule.IMAP, `连接 "${account.name}" (${account.email})...`)
       await connectAccount(account.id)
       logger.info(LogModule.IMAP, `"${account.name}" 已连接`)

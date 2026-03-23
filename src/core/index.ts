@@ -10,6 +10,7 @@ import { MailManagerLogger, createLogger, LogModule } from '../logger'
 import { MailRenderer } from '../render'
 import {
   initState,
+  setNewMailHandler,
   clearState,
   generateInstanceId,
   setCurrentInstanceId,
@@ -17,7 +18,7 @@ import {
   activeConnections,
 } from './state'
 import { registerRulesCacheListener } from './rules'
-import { startAllConnections, stopAllConnections } from './forward'
+import { handleNewMail, startAllConnections, stopAllConnections } from './forward'
 import type { ImapConnection } from '../imap'
 
 // ============ 初始化 ============
@@ -31,6 +32,7 @@ export async function initCore(ctx: Context, config: Config): Promise<void> {
   setCurrentInstanceId(instanceId)
 
   initState(ctx, config, logger, mailRenderer)
+  setNewMailHandler(handleNewMail)
 
   // 注册规则缓存监听器（用于多实例同步）
   registerRulesCacheListener()
@@ -109,6 +111,7 @@ export {
   updateAccount,
   deleteAccount,
   testConnection,
+  testConnectionWithConfig,
   connectAccount,
   disconnectAccount,
   updateAccountStatus,

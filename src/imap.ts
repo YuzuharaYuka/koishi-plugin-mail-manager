@@ -14,7 +14,7 @@ import { ImapFlow } from 'imapflow'
 import { Context } from 'koishi'
 import type { MailAccount, MailAddress, MailAttachment, StoredMail } from './types'
 import { getLogger } from './logger'
-import { parseMail, type ParsedMail } from './parser'
+import { parseMail, htmlToText, type ParsedMail } from './parser'
 import { MailProviderFactory, type MailProviderAdapter } from './providers'
 import {
   sleep,
@@ -91,6 +91,8 @@ export class ImapConnection {
   private reconnectTimer: (() => void) | null = null
   private reconnectAttempts = 0
   private lastConnectError: Error | null = null
+  private suppressNextCloseReconnect = false
+  private lastReconnectScheduledAt = 0
 
   // 健康检查
   private healthCheckTimer: (() => void) | null = null
@@ -115,13 +117,14 @@ export class ImapConnection {
     private readonly account: MailAccount,
     private readonly config: {
       mailRetentionDays: number
-      autoReconnect: boolean
       maxReconnectAttempts: number
-      reconnectInterval: number
+      reconnectBaseInterval: number
+      fastReconnectAttempts: number
+      fastReconnectInterval: number
+      reconnectMaxInterval: number
+      reconnectJitterRatio: number
       connectionTimeout: number
-      healthCheckEnabled: boolean
       healthCheckInterval: number
-      enableConnectivityTest: boolean
       connectivityTestTimeout: number
     },
     private readonly onMailReceived: (mail: ParsedMail) => void,
@@ -142,6 +145,20 @@ export class ImapConnection {
     if (this.state.isConnecting) return 'connecting'
     if (this.state.isConnected) return 'connected'
     return 'disconnected'
+  }
+
+  /**
+   * 检查连接是否已达到终止状态
+   * 终止状态意味着：已被销毁 OR 已达到最大重连次数
+   * 此时应从 activeConnections 中移除
+   */
+  isTerminallyFailed(): boolean {
+    if (this.disposed) return true
+    // 如果已达到最大重连企图次数且当前未连接，则认为是终止失败
+    if (this.reconnectAttempts > this.config.maxReconnectAttempts && !this.state.isConnected) {
+      return true
+    }
+    return false
   }
 
   /**
@@ -337,6 +354,7 @@ export class ImapConnection {
     this.state.isConnecting = false
     this.state.isConnected = true
     this.reconnectAttempts = 0
+    this.lastConnectError = null
     this.cancelReconnect()
     this.notifyStatus('connected')
     logger.debug('%s 已连接', this.account.email)
@@ -360,7 +378,7 @@ export class ImapConnection {
           forceIPv4: true,
           logger,
           connectivityTimeout: this.config.connectivityTestTimeout,
-          enableConnectivityTest: this.config.enableConnectivityTest,
+          enableConnectivityTest: true,
           enableBackupDns: true,
         }
       )
@@ -430,6 +448,9 @@ export class ImapConnection {
     )
     logger.error('%s 连接失败: %s', this.account.email, friendlyMsg)
 
+    // 某些失败路径会先触发 connect() catch 再触发 close 事件，
+    // 这里标记忽略下一次 close 的重连调度，避免重复递增重连计数。
+    this.suppressNextCloseReconnect = true
     this.cleanupClient()
     this.notifyStatus('error', friendlyMsg)
 
@@ -451,11 +472,19 @@ export class ImapConnection {
       return
     }
 
+    if (this.suppressNextCloseReconnect) {
+      this.suppressNextCloseReconnect = false
+      logger.debug('%s 忽略失败链路的 close 重连调度', this.account.email)
+      return
+    }
+
     if (isConnected) {
+      this.lastConnectError = new Error('Unexpected close')
       logger.debug('%s 连接已关闭', this.account.email)
       this.notifyStatus('disconnected')
       this.tryScheduleReconnect()
     } else if (isConnecting) {
+      this.lastConnectError = new Error('Connection closed during handshake')
       logger.debug('%s 握手时连接关闭', this.account.email)
       this.tryScheduleReconnect()
     }
@@ -481,18 +510,21 @@ export class ImapConnection {
       return
     }
 
-    if (!this.config.autoReconnect) {
-      logger.debug('%s 自动重连已禁用', this.account.email)
+    if (!this.account.enabled) return
+
+    const now = Date.now()
+    if (now - this.lastReconnectScheduledAt < 1000) {
+      logger.debug('%s 重连调度过于频繁，已忽略', this.account.email)
       return
     }
-
-    if (!this.account.enabled) return
 
     this.reconnectAttempts++
 
     if (this.reconnectAttempts > this.config.maxReconnectAttempts) {
-      logger.warn('%s 达到最大重连次数 (%d)', this.account.email, this.config.maxReconnectAttempts)
-      this.notifyStatus('error', `已达到最大重连次数 (${this.config.maxReconnectAttempts})`)
+      const finalError = this.lastConnectError?.message || '未知错误'
+      logger.warn('%s 达到最大重连次数 (%d/次)，停止重连，最后错误: %s',
+        this.account.email, this.config.maxReconnectAttempts, finalError)
+      this.notifyStatus('error', `已达到最大重连次数 (${this.config.maxReconnectAttempts})，最后错误: ${finalError}`)
       return
     }
 
@@ -500,8 +532,14 @@ export class ImapConnection {
     logger.info('%s 将在 %ds 后重连 (第 %d/%d 次)',
       this.account.email, Math.floor(delay / 1000), this.reconnectAttempts, this.config.maxReconnectAttempts)
 
-    // 使用 Koishi 托管的定时器
-    this.reconnectTimer = this.ctx.setTimeout(() => this.executeReconnect(), delay)
+    // 使用 Koishi 托管的定时器（上下文失活时不应抛错中断主流程）
+    try {
+      this.reconnectTimer = this.ctx.setTimeout(() => this.executeReconnect(), delay)
+      this.lastReconnectScheduledAt = now
+    } catch (err) {
+      logger.warn('%s 重连调度失败: %s', this.account.email, (err as Error).message)
+      this.reconnectTimer = null
+    }
   }
 
   private async executeReconnect(): Promise<void> {
@@ -534,10 +572,30 @@ export class ImapConnection {
   }
 
   private calculateReconnectDelay(): number {
-    return this.provider.getReconnectDelay(this.reconnectAttempts, this.config.reconnectInterval)
+    const attempt = this.reconnectAttempts
+    const isFastRetry = this.isTransientNetworkError(this.lastConnectError)
+      && attempt <= this.config.fastReconnectAttempts
+
+    const providerDelay = this.provider.getReconnectDelay(attempt, this.config.reconnectBaseInterval)
+    const fastDelay = this.config.fastReconnectInterval * 1000
+    const baseDelay = isFastRetry ? Math.min(providerDelay, fastDelay) : providerDelay
+    const maxDelay = Math.max(1000, this.config.reconnectMaxInterval * 1000)
+
+    const jitterRatio = Math.max(0, Math.min(this.config.reconnectJitterRatio, 0.5))
+    const jitter = 1 + (Math.random() * 2 - 1) * jitterRatio
+
+    return Math.max(1000, Math.floor(Math.min(baseDelay, maxDelay) * jitter))
   }
 
-  // ==================== 内部逻辑：健康检查 ====================
+  private isTransientNetworkError(error: Error | null): boolean {
+    if (!error) return false
+    const msg = error.message.toLowerCase()
+    return msg.includes('econnreset')
+      || msg.includes('etimedout')
+      || msg.includes('timeout')
+      || msg.includes('unexpected close')
+      || msg.includes('network')
+  }
 
   /**
    * 启动健康检查/心跳机制
@@ -549,7 +607,6 @@ export class ImapConnection {
    * 这对于像网易邮箱这样 IDLE 超时较短的服务器非常重要
    */
   private startHealthCheck(): void {
-    if (!this.config.healthCheckEnabled) return
     if (this.disposed) return // 已销毁则不启动
 
     this.stopHealthCheck()
@@ -566,10 +623,16 @@ export class ImapConnection {
       logger.debug('%s 启动健康检查 (间隔 %ds)', this.account.email, this.config.healthCheckInterval)
     }
 
-    // 使用 Koishi 托管的定时器
-    this.healthCheckTimer = this.ctx.setInterval(() => {
-      this.performHealthCheck()
-    }, intervalMs)
+    // 使用 Koishi 托管的定时器（上下文失活时不应抛错中断主流程）
+    try {
+      this.healthCheckTimer = this.ctx.setInterval(() => {
+        this.performHealthCheck()
+      }, intervalMs)
+    } catch (err) {
+      logger.warn('%s 健康检查调度失败: %s', this.account.email, (err as Error).message)
+      this.healthCheckTimer = null
+      return
+    }
 
     this.lastHealthCheck = Date.now()
   }
@@ -691,12 +754,16 @@ export class ImapConnection {
         // 优先 IDLE，失败时切换到轮询
         this.startSmartIdleLoop()
         // 延迟启动备选轮询（给 IDLE 一些时间证明自己）
-        this.ctx.setTimeout(() => {
-          if (!this.disposed && this.listenerState.idleFailCount > 2) {
-            logger.debug('%s IDLE 不可靠，启用轮询', this.account.email)
-            this.startSmartPolling()
-          }
-        }, 5 * 60 * 1000) // 5分钟后检查
+        try {
+          this.ctx.setTimeout(() => {
+            if (!this.disposed && this.listenerState.idleFailCount > 2) {
+              logger.debug('%s IDLE 不可靠，启用轮询', this.account.email)
+              this.startSmartPolling()
+            }
+          }, 5 * 60 * 1000) // 5分钟后检查
+        } catch (err) {
+          logger.debug('%s 监听降级调度失败: %s', this.account.email, (err as Error).message)
+        }
         break
 
       case 'hybrid':
@@ -818,9 +885,15 @@ export class ImapConnection {
 
     logger.debug('[轮询] %s 启动 (间隔 %ds)', this.account.email, Math.floor(pollInterval / 1000))
 
-    this.pollTimer = this.ctx.setInterval(async () => {
-      await this.performSmartPoll()
-    }, pollInterval)
+    try {
+      this.pollTimer = this.ctx.setInterval(async () => {
+        await this.performSmartPoll()
+      }, pollInterval)
+    } catch (err) {
+      logger.warn('%s 轮询调度失败: %s', this.account.email, (err as Error).message)
+      this.pollTimer = null
+      this.listenerState.pollEnabled = false
+    }
   }
 
   /**
@@ -1329,7 +1402,12 @@ export class ImapConnection {
   }
 
   private notifyStatus(status: MailAccount['status'], error?: string): void {
-    this.onStatusChanged?.(status, error)
+    if (!this.onStatusChanged) return
+    try {
+      this.onStatusChanged(status, error)
+    } catch (err) {
+      logger.debug('%s 状态回调已忽略: %s', this.account.email, (err as Error).message)
+    }
   }
 
   private assertConnected(): void {
@@ -1424,6 +1502,11 @@ export function convertParsedMail(accountId: number, mail: ParsedMail): Omit<Sto
 
   let textContent = mail.text
   let htmlContent = mail.html
+
+  // 一些营销邮件只提供 HTML，缺少 text/plain 分段；这里做兜底提取。
+  if ((!textContent || !textContent.trim()) && htmlContent) {
+    textContent = htmlToText(htmlContent)
+  }
 
   // 截断过长的文本内容
   if (textContent && textContent.length > MAX_TEXT_LENGTH) {

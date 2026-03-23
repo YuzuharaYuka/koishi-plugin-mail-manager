@@ -31,6 +31,18 @@
               placeholder="全部"
             />
           </div>
+          <div class="search-item">
+            <Icon name="search" />
+            <input
+              v-model.trim="filters.keyword"
+              class="ml-input"
+              placeholder="搜索主题 / 发件人 / 内容"
+              @keyup.enter="onSearch"
+            />
+            <button v-if="filters.keyword" class="clear-btn" @click="clearKeyword" title="清空搜索">
+              <Icon name="close" />
+            </button>
+          </div>
         </div>
         <button class="ml-btn" @click="loadMails"><Icon name="refresh" /> 刷新</button>
       </div>
@@ -105,12 +117,15 @@
                         <Icon name="paperclip" /> {{ mail.attachments.length }}
                       </span>
                       <span v-if="mail.isForwarded" class="forward-badge">已转发</span>
-                      {{ (mail.textContent || '').slice(0, 150) }}
+                      {{ getMailSnippet(mail) }}
                     </div>
                   </div>
                 </td>
                 <td class="col-date" data-label="时间">
-                  <div class="date-cell">{{ formatDate(mail.receivedAt) }}</div>
+                  <div class="date-cell">
+                    <div class="date-main">{{ formatDate(mail.receivedAt) }}</div>
+                    <div class="date-sub">{{ getRelativeTime(mail.receivedAt) }}</div>
+                  </div>
                 </td>
                 <td class="col-action" data-label="操作" @click.stop>
                   <div class="action-btns">
@@ -239,9 +254,27 @@
 
           <!-- 右侧：邮件内容 -->
           <div class="mail-content-main">
+            <div class="detail-toolbar">
+              <div class="detail-meta">
+                <div class="detail-subject">{{ selectedMail.subject || '(无主题)' }}</div>
+                <div class="detail-badges">
+                  <span v-if="selectedMail.attachments.length > 0" class="toolbar-badge">
+                    <Icon name="paperclip" /> {{ selectedMail.attachments.length }}
+                  </span>
+                  <span v-if="selectedMail.isForwarded" class="toolbar-badge success">已转发</span>
+                  <span class="toolbar-time">{{ formatDate(selectedMail.receivedAt) }}</span>
+                </div>
+              </div>
+            </div>
+
             <!-- 邮件内容区域 -->
             <div class="mail-content">
-              <pre v-if="contentTab === 'text'" class="text-content">{{ selectedMail.textContent || '(无内容)' }}</pre>
+              <div v-if="contentTab === 'text'" class="text-panel">
+                <div v-if="selectedMail.htmlContent && !selectedMail.textContent" class="text-fallback-tip">
+                  <Icon name="info" /> 当前内容由 HTML 自动提取为纯文本
+                </div>
+                <pre class="text-content">{{ getMailReadableText(selectedMail) }}</pre>
+              </div>
               <iframe
                 v-else-if="contentTab === 'html'"
                 :srcdoc="selectedMail.htmlContent"
@@ -292,6 +325,7 @@ const filters = reactive({
   accountId: undefined as number | undefined,
   isRead: undefined as boolean | undefined,
   isForwarded: undefined as boolean | undefined,
+  keyword: '',
 })
 
 // 分页状态
@@ -361,6 +395,51 @@ const formatDate = (dateStr: string) => {
   return date.toLocaleString()
 }
 
+const getRelativeTime = (dateStr: string) => {
+  const date = new Date(dateStr).getTime()
+  const now = Date.now()
+  const diff = now - date
+  const minute = 60 * 1000
+  const hour = 60 * minute
+  const day = 24 * hour
+
+  if (diff < minute) return '刚刚'
+  if (diff < hour) return `${Math.floor(diff / minute)} 分钟前`
+  if (diff < day) return `${Math.floor(diff / hour)} 小时前`
+  if (diff < 7 * day) return `${Math.floor(diff / day)} 天前`
+  return '较早'
+}
+
+const extractTextFromHtml = (html?: string) => {
+  if (!html) return ''
+  const withoutScript = html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+  return withoutScript.replace(/\s+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+const getMailReadableText = (mail: StoredMail) => {
+  const rawText = (mail.textContent || '').trim()
+  if (rawText) return rawText
+  const htmlText = extractTextFromHtml(mail.htmlContent)
+  return htmlText || '(无内容)'
+}
+
+const getMailSnippet = (mail: StoredMail) => {
+  const content = getMailReadableText(mail)
+  return content.slice(0, 150) || '(无内容摘要)'
+}
+
 const formatSize = (bytes: number) => {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
@@ -419,6 +498,7 @@ const loadMails = async () => {
       accountId: filters.accountId,
       isRead: filters.isRead,
       isForwarded: filters.isForwarded,
+      keyword: filters.keyword || undefined,
     }
     const res = await mailApi.list(query)
     mails.value = res.items
@@ -429,6 +509,17 @@ const loadMails = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const onSearch = () => {
+  pagination.page = 1
+  loadMails()
+}
+
+const clearKeyword = () => {
+  filters.keyword = ''
+  pagination.page = 1
+  loadMails()
 }
 
 const loadAccounts = async () => {
@@ -536,6 +627,48 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--ml-bg-base);
+  border: 1px solid var(--ml-border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  min-width: 260px;
+  flex: 1;
+
+  .ml-input {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    padding: 4px;
+    min-width: 140px;
+  }
+
+  .ml-input:focus {
+    box-shadow: none;
+  }
+}
+
+.clear-btn {
+  border: none;
+  background: transparent;
+  color: var(--ml-text-tertiary);
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clear-btn:hover {
+  background: var(--ml-bg-hover);
+  color: var(--ml-text);
+}
+
 .filter-item {
   display: flex;
   align-items: center;
@@ -618,24 +751,24 @@ onMounted(() => {
 
 /* 列定义 */
 .col-sender {
-  width: 12%;
+  width: 22%;
   min-width: 180px;
 }
 
 .col-subject {
-  width: 64%;
+  width: 50%;
   min-width: 300px;
 }
 
 .col-date {
-  width: 8%;
+  width: 18%;
   min-width: 140px;
   white-space: nowrap;
   text-align: center;
 }
 
 .col-action {
-  width: 6%;
+  width: 10%;
   min-width: 100px;
   text-align: center;
 }
@@ -724,8 +857,17 @@ onMounted(() => {
 
 .date-cell {
   text-align: center;
-  font-size: 13px;
-  color: var(--ml-text-secondary);
+
+  .date-main {
+    font-size: 13px;
+    color: var(--ml-text);
+  }
+
+  .date-sub {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--ml-text-secondary);
+  }
 }
 
 .status-dot {
@@ -996,6 +1138,51 @@ tbody tr:hover .action-btns {
   flex-direction: column;
 }
 
+.detail-toolbar {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ml-border);
+  background: var(--ml-bg-container);
+  flex-shrink: 0;
+}
+
+.detail-subject {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ml-text);
+  line-height: 1.35;
+}
+
+.detail-badges {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 12px;
+  background: var(--ml-bg-hover);
+  border: 1px solid var(--ml-border);
+}
+
+.toolbar-badge.success {
+  background: #e8f8ef;
+  color: #1b8a4a;
+  border-color: #b8e5c9;
+}
+
+.toolbar-time {
+  font-size: 12px;
+  color: var(--ml-text-secondary);
+}
+
 .mail-content {
   flex: 1;
   min-height: 0; // 关键：允许 flex 子项收缩，防止溢出
@@ -1007,6 +1194,25 @@ tbody tr:hover .action-btns {
   flex-direction: column;
   position: relative;
   margin: 0;
+
+  .text-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .text-fallback-tip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--ml-border);
+    color: #1765ad;
+    background: #edf6ff;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
 
   .text-content {
     flex: 1;

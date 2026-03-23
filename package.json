@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-mail-manager",
-  "description": "邮件监听与自动转发插件。支持多账号 IMAP 监听、规则匹配自动转发、WebUI 管理界面。",
-  "version": "1.0.1",
+  "description": "邮件监听与转发插件。",
+  "version": "1.0.3",
   "homepage": "https://github.com/YuzuharaYuka/koishi-plugin-mail-manager",
   "repository": {
     "type": "git",
@@ -48,9 +48,9 @@
     }
   },
   "dependencies": {
-    "imapflow": "^1.2.6",
-    "mailparser": "^3.9.1",
-    "marked": "^17.0.1",
-    "postal-mime": "^2.7.3"
+    "imapflow": "^1.2.16",
+    "mailparser": "^3.9.4",
+    "marked": "^17.0.5",
+    "postal-mime": "^2.7.4"
   }
 }
